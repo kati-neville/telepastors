@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { DistributionQuickAction } from "@/components/assignments/distribution-quick-action";
 import {
   Card,
   CardContent,
@@ -9,15 +10,42 @@ import {
 import { LeadershipDashboard } from "@/components/dashboard/leadership-dashboard";
 import { TelepastorDashboard } from "@/components/calls/telepastor-dashboard";
 import { PlaceholderPage } from "@/components/layout/placeholder-page";
+import { canDistributeContacts } from "@/lib/auth/assignments";
 import { getRoleLabel } from "@/lib/auth/roles";
 import { requireAuthSession } from "@/lib/auth/session";
 import { fetchCallQueueStats } from "@/lib/queries/calls";
+import { fetchDistributionSummary } from "@/lib/queries/assignments";
 import { fetchLeadershipDashboard, fetchTelepastorRecentActivity } from "@/lib/queries/reports";
+import { reportFilterSchema } from "@/lib/validations/reports";
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function getParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = params[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await requireAuthSession();
   const { telepastor } = session;
   const context = { telepastor };
+  const resolvedSearchParams = await searchParams;
+
+  const filters = reportFilterSchema.parse({
+    campaignId: getParam(resolvedSearchParams, "campaignId"),
+    governorId: getParam(resolvedSearchParams, "governorId"),
+    leaderId: getParam(resolvedSearchParams, "leaderId"),
+    telepastorId: getParam(resolvedSearchParams, "telepastorId"),
+    response: getParam(resolvedSearchParams, "response"),
+    from: getParam(resolvedSearchParams, "from"),
+    to: getParam(resolvedSearchParams, "to"),
+    view: getParam(resolvedSearchParams, "view"),
+  });
 
   if (telepastor.role === "TELEPASTOR") {
     const [stats, recentActivity] = await Promise.all([
@@ -39,19 +67,26 @@ export default async function DashboardPage() {
     telepastor.role === "GOVERNOR" ||
     telepastor.role === "LEADER"
   ) {
-    const data = await fetchLeadershipDashboard(context);
-    const performanceTitle =
-      telepastor.role === "SUPER_ADMIN"
-        ? "Governor performance"
-        : telepastor.role === "GOVERNOR"
-          ? "Leader & Telepastor progress"
-          : "Telepastor performance";
+    const [data, distributionSummary] = await Promise.all([
+      fetchLeadershipDashboard(context, filters),
+      canDistributeContacts(context)
+        ? fetchDistributionSummary(context)
+        : Promise.resolve({ totalReady: 0, campaigns: [] }),
+    ]);
 
     return (
-      <LeadershipDashboard
-        data={data}
-        performanceTitle={performanceTitle}
-      />
+      <div className="space-y-6">
+        <DistributionQuickAction
+          totalReady={distributionSummary.totalReady}
+          campaigns={distributionSummary.campaigns}
+        />
+        <LeadershipDashboard
+          data={data}
+          role={telepastor.role}
+          filters={filters}
+          basePath="/dashboard"
+        />
+      </div>
     );
   }
 

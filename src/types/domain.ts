@@ -244,6 +244,7 @@ export type LeadershipDashboardData = {
   stats: CampaignStatistics;
   activeCampaigns: number;
   teamPerformance: TeamMemberStatistics[];
+  teamPerformanceView: "governor" | "leader" | "telepastor";
   recentActivity: RecentCallActivity[];
   filterOptions: ReportFilterOptions;
 };

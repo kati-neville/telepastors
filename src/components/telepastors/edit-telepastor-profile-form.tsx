@@ -19,12 +19,18 @@ import type { TelepastorDetail } from "@/types/domain";
 
 export function EditTelepastorProfileForm({
   telepastor,
+  redirectPath,
+  showCancel = true,
 }: {
   telepastor: TelepastorDetail;
+  redirectPath?: string;
+  showCancel?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const successPath = redirectPath ?? `/telepastors/${telepastor.id}`;
+  const cancelPath = `/telepastors/${telepastor.id}`;
 
   const form = useForm<UpdateTelepastorProfileValues>({
     resolver: zodResolver(updateTelepastorProfileSchema),
@@ -49,7 +55,7 @@ export function EditTelepastorProfileForm({
       }
 
       toast.success("Profile updated");
-      router.push(`/telepastors/${telepastor.id}`);
+      router.push(successPath);
       router.refresh();
     });
   });
@@ -84,8 +90,13 @@ export function EditTelepastorProfileForm({
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="address">Address</Label>
-          <Textarea id="address" rows={3} {...form.register("address")} />
+          <Label htmlFor="address">Location / address</Label>
+          <Textarea
+            id="address"
+            rows={3}
+            placeholder="City, area, or full address"
+            {...form.register("address")}
+          />
         </div>
 
         <div className="space-y-2">
@@ -100,14 +111,16 @@ export function EditTelepastorProfileForm({
       </div>
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push(`/telepastors/${telepastor.id}`)}
-          disabled={isPending}
-        >
-          Cancel
-        </Button>
+        {showCancel ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push(cancelPath)}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+        ) : null}
         <Button type="submit" disabled={isPending}>
           {isPending ? (
             <>

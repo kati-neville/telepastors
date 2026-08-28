@@ -45,17 +45,35 @@ function testAuthorization() {
   const telepastorA = makeTelepastor({ id: "tp-a", role: "TELEPASTOR" });
   const telepastorB = makeTelepastor({ id: "tp-b", role: "TELEPASTOR" });
   const leader = makeTelepastor({ id: "lead-a", role: "LEADER" });
+  const governor = makeTelepastor({ id: "gov-a", role: "GOVERNOR" });
+  const superAdmin = makeTelepastor({ id: "sa-1", role: "SUPER_ADMIN" });
 
   const assignedToA = {
     current_assignee_id: "tp-a",
   };
+  const assignedToLeader = {
+    current_assignee_id: "lead-a",
+  };
+  const assignedToGovernor = {
+    current_assignee_id: "gov-a",
+  };
 
   assert(canAccessCallQueue(contextFor(telepastorA)), "Telepastor can access queue");
-  assert(!canAccessCallQueue(contextFor(leader)), "Leader cannot access queue");
+  assert(canAccessCallQueue(contextFor(leader)), "Leader can access queue");
+  assert(canAccessCallQueue(contextFor(governor)), "Governor can access queue");
+  assert(!canAccessCallQueue(contextFor(superAdmin)), "Super Admin cannot access queue");
 
   assert(
     canRecordCallAttempt(contextFor(telepastorA), assignedToA),
     "Telepastor can record for own contact",
+  );
+  assert(
+    canRecordCallAttempt(contextFor(leader), assignedToLeader),
+    "Leader can record for own contact",
+  );
+  assert(
+    canRecordCallAttempt(contextFor(governor), assignedToGovernor),
+    "Governor can record for own contact",
   );
   assert(
     !canRecordCallAttempt(contextFor(telepastorB), assignedToA),
@@ -65,6 +83,10 @@ function testAuthorization() {
   assert(
     canViewAssignedContact(contextFor(telepastorA), assignedToA),
     "Telepastor can view own contact",
+  );
+  assert(
+    canViewAssignedContact(contextFor(leader), assignedToLeader),
+    "Leader can view own contact",
   );
   assert(
     !canViewAssignedContact(contextFor(telepastorB), assignedToA),

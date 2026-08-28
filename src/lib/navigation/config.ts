@@ -36,7 +36,7 @@ export const NAV_ITEMS: NavItemDefinition[] = [
     isVisible: canAccessCampaigns,
   },
   {
-    title: "Assignments",
+    title: "Distribute",
     href: "/assignments",
     icon: "share-2",
     isVisible: canDistributeContacts,

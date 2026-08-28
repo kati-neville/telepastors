@@ -18,6 +18,10 @@ import type {
   TeamMemberStatistics,
   TelepastorSummary,
 } from "@/types/domain";
+import {
+  memberMatchesPerformanceView,
+  resolveTeamPerformanceView,
+} from "@/lib/reports/team-performance-view";
 import type { ReportFilterValues } from "@/lib/validations/reports";
 
 type ContactRow = ContactStatRow & { id: string; campaign_id: string };
@@ -311,24 +315,25 @@ export async function fetchLeadershipDashboard(
     filters,
   );
 
-  const performanceMembers =
-    context.telepastor.role === "SUPER_ADMIN"
-      ? allMembers.filter((member) => member.role === "GOVERNOR")
-      : context.telepastor.role === "GOVERNOR"
-        ? scopedMembers.filter(
-            (member) =>
-              member.role === "LEADER" || member.role === "TELEPASTOR",
-          )
-        : scopedMembers.filter((member) => member.role === "TELEPASTOR");
-
-  let teamPerformance = buildTeamPerformance(
-    performanceMembers,
-    contacts,
-    attemptData,
+  const view = resolveTeamPerformanceView(
+    context.telepastor.role,
+    filters.view,
   );
 
-  if (context.telepastor.role === "SUPER_ADMIN") {
+  let teamPerformance: TeamMemberStatistics[];
+
+  if (view === "governor" && context.telepastor.role === "SUPER_ADMIN") {
     teamPerformance = buildGovernorPerformance(allMembers, contacts, attemptData);
+  } else {
+    const performanceMembers = scopedMembers.filter((member) =>
+      memberMatchesPerformanceView(member.role, view),
+    );
+
+    teamPerformance = buildTeamPerformance(
+      performanceMembers,
+      contacts,
+      attemptData,
+    );
   }
 
   const recentActivity = await fetchRecentActivity(contactIds, filters);
@@ -339,6 +344,7 @@ export async function fetchLeadershipDashboard(
     stats,
     activeCampaigns,
     teamPerformance,
+    teamPerformanceView: view,
     recentActivity,
     filterOptions,
   };

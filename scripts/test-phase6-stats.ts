@@ -1,4 +1,11 @@
 import { getReportableMembers, getScopedAssigneeIds } from "@/lib/auth/reports";
+import {
+  buildTeamMemberDrillDownQuery,
+  getAvailableTeamPerformanceViews,
+  getDefaultTeamPerformanceView,
+  memberMatchesPerformanceView,
+  resolveTeamPerformanceView,
+} from "@/lib/reports/team-performance-view";
 import { computeContactStatistics } from "@/lib/stats/compute";
 import type { Telepastor } from "@/types/domain";
 
@@ -168,11 +175,61 @@ function testReportScoping() {
   assert(telepastorScope[0]!.id === "tp-a", "Telepastor self scope");
 }
 
+function testTeamPerformanceViews() {
+  assert(
+    getAvailableTeamPerformanceViews("SUPER_ADMIN").join(",") ===
+      "governor,leader,telepastor",
+    "Super admin view modes",
+  );
+  assert(
+    getAvailableTeamPerformanceViews("GOVERNOR").join(",") === "leader,telepastor",
+    "Governor view modes",
+  );
+  assert(
+    getAvailableTeamPerformanceViews("LEADER").join(",") === "telepastor",
+    "Leader view modes",
+  );
+
+  assert(getDefaultTeamPerformanceView("SUPER_ADMIN") === "governor", "Super admin default");
+  assert(getDefaultTeamPerformanceView("GOVERNOR") === "leader", "Governor default");
+  assert(getDefaultTeamPerformanceView("LEADER") === "telepastor", "Leader default");
+
+  assert(
+    resolveTeamPerformanceView("GOVERNOR", "governor") === "leader",
+    "Invalid view falls back to role default",
+  );
+  assert(
+    resolveTeamPerformanceView("GOVERNOR", "telepastor") === "telepastor",
+    "Governor can select telepastor view",
+  );
+
+  assert(memberMatchesPerformanceView("LEADER", "leader"), "Leader matches leader view");
+  assert(!memberMatchesPerformanceView("TELEPASTOR", "leader"), "Telepastor excluded from leader view");
+
+  const drillDown = buildTeamMemberDrillDownQuery(
+    "GOVERNOR",
+    "leader",
+    {
+      memberId: "lead-a",
+      memberName: "Leader A",
+      memberRole: "LEADER",
+      stats: computeContactStatistics([], 0),
+      totalCallAttempts: 0,
+      lastAttemptAt: null,
+    },
+    {},
+  );
+
+  assert(drillDown?.view === "telepastor", "Governor leader drill-down switches view");
+  assert(drillDown?.leaderId === "lead-a", "Governor leader drill-down sets leaderId");
+}
+
 function main() {
   testUniqueContactStatistics();
   testRepeatedAttemptsDoNotInflateContacts();
   testReachAndComingRates();
   testReportScoping();
+  testTeamPerformanceViews();
   console.log("Phase 6 statistics tests passed.");
 }
 

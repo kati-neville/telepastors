@@ -46,6 +46,7 @@ Run all SQL files in `supabase/migrations/` **in order** against your Supabase p
 6. `20240827000006_sms_broadcasts.sql`
 7. `20240827000007_audit_logs.sql`
 8. `20240827000008_fix_assignment_reassignment_rls.sql`
+9. `20240827000009_governor_leader_calling.sql`
 
 ### 4. Bootstrap the first Super Admin
 
@@ -90,7 +91,7 @@ npm run dev
 
 ## Deployment checklist
 
-- [ ] All 7 migrations applied to production Supabase
+- [ ] All 9 migrations applied to production Supabase
 - [ ] Super Admin bootstrapped
 - [ ] Environment variables set in hosting platform
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` not exposed to client bundle

@@ -10,6 +10,7 @@ export const AUDIT_ACTIONS = {
   CONTACTS_IMPORTED: "contacts.imported",
   CONTACTS_ASSIGNED: "contacts.assigned",
   CONTACTS_REASSIGNED: "contacts.reassigned",
+  CONTACTS_BULK_ASSIGNED: "contacts.bulk_assigned",
   CALL_RESPONSE_RECORDED: "call.response_recorded",
   SMS_BROADCAST_INITIATED: "sms.broadcast_initiated",
   WHATSAPP_TEMPLATE_SAVED: "whatsapp_template.saved",

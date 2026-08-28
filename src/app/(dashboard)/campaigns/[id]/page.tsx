@@ -112,7 +112,9 @@ export default async function CampaignDetailPage({
         <div className="flex flex-wrap gap-2">
           {canDistribute ? (
             <Button
-              render={<Link href={`/campaigns/${campaign.id}/distribute`} />}
+              render={
+                <Link href={`/assignments?campaign=${campaign.id}`} />
+              }
             >
               <Share2 />
               Distribute

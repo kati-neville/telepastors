@@ -8,6 +8,10 @@ import { canAccessCallQueue, canRecordCallAttempt } from "@/lib/auth/calls";
 import { canChangeRole, canViewUser } from "@/lib/auth/permissions";
 import { AUDIT_ACTIONS } from "@/lib/audit/types";
 import { toClientErrorMessage } from "@/lib/errors/client-message";
+import {
+  getMissingProfileFields,
+  isProfileComplete,
+} from "@/lib/profile/completeness";
 import { buildContactSearchFilter, escapeIlikePattern } from "@/lib/utils/search";
 import { broadcastComposerSchema } from "@/lib/validations/broadcasts";
 import type { Telepastor } from "@/types/domain";
@@ -186,7 +190,10 @@ function testCallRecordingAuthorization() {
   const contactForB = { ...contactForA, current_assignee_id: "tp-b" };
 
   assert(canAccessCallQueue({ telepastor: tpA }), "Telepastor accesses call queue");
-  assert(!canAccessCallQueue({ telepastor: makeTelepastor({ id: "gov", role: "GOVERNOR" }) }), "Governor cannot access queue");
+  assert(
+    canAccessCallQueue({ telepastor: makeTelepastor({ id: "gov", role: "GOVERNOR" }) }),
+    "Governor accesses call queue",
+  );
 
   assert(
     canRecordCallAttempt({ telepastor: tpA }, contactForA),
@@ -215,6 +222,30 @@ function testTemplatePermissions() {
   assert(!canManageWhatsAppTemplates({ telepastor: telepastor }), "Telepastor cannot manage templates");
 }
 
+function testProfileCompleteness() {
+  const incomplete = {
+    address: null,
+    date_of_birth: null,
+    occupation: null,
+    profile_picture_url: null,
+  };
+
+  assert(
+    getMissingProfileFields(incomplete).length === 4,
+    "All optional profile fields flagged when missing",
+  );
+  assert(!isProfileComplete(incomplete), "Incomplete profile detected");
+
+  const complete = {
+    address: "Accra",
+    date_of_birth: "1990-01-01",
+    occupation: "Teacher",
+    profile_picture_url: "https://example.com/photo.jpg",
+  };
+
+  assert(isProfileComplete(complete), "Complete profile passes");
+}
+
 function main() {
   testAuditActionCatalog();
   testErrorSanitization();
@@ -225,6 +256,7 @@ function main() {
   testCallRecordingAuthorization();
   testBroadcastRecipientValidation();
   testTemplatePermissions();
+  testProfileCompleteness();
   console.log("Phase 8 hardening tests passed.");
 }
 

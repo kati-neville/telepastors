@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -8,6 +9,7 @@ import {
   FileSpreadsheet,
   Info,
   Loader2,
+  Share2,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -557,12 +559,22 @@ export function ContactImportWizard({
               <p className="mt-2 text-sm text-muted-foreground">
                 {importedCount} contacts were added to this campaign.
               </p>
-              <Button
-                className="mt-4"
-                onClick={() => router.push(`/campaigns/${campaignId}`)}
-              >
-                View campaign
-              </Button>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button
+                  render={
+                    <Link href={`/assignments?campaign=${campaignId}`} />
+                  }
+                >
+                  <Share2 />
+                  Distribute now
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/campaigns/${campaignId}`)}
+                >
+                  View campaign
+                </Button>
+              </div>
             </div>
           ) : null}
         </CardContent>

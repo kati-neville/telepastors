@@ -34,6 +34,7 @@ type ActionResult =
   | { success: false; error: string };
 
 function revalidateTelepastorPaths(id?: string) {
+  revalidatePath("/profile");
   revalidatePath("/telepastors");
   if (id) {
     revalidatePath(`/telepastors/${id}`);
@@ -386,6 +387,17 @@ export async function uploadProfilePhotoAction(
 
   revalidateTelepastorPaths(telepastorId);
   return { success: true, id: telepastorId };
+}
+
+export async function requireProfileAccess() {
+  const session = await requireAuthSession();
+  const telepastor = await fetchTelepastorById(session.telepastor.id);
+
+  if (!telepastor) {
+    redirect("/login?error=profile_missing");
+  }
+
+  return { session, telepastor };
 }
 
 export async function requireTelepastorAccess(id: string) {

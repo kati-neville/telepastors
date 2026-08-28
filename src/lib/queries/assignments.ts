@@ -188,6 +188,35 @@ export async function fetchContactAssignmentHistory(
   }));
 }
 
+export async function fetchDistributionPoolContactIds(
+  campaignId: string,
+  context: AuthorizationContext,
+): Promise<string[]> {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("contacts")
+    .select("id")
+    .eq("campaign_id", campaignId)
+    .order("name", { ascending: true });
+
+  const pool = getDistributionPoolFilter(context);
+
+  if (pool === "unassigned") {
+    query = query.eq("assignment_status", "UNASSIGNED");
+  } else {
+    query = query.eq("current_assignee_id", context.telepastor.id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((contact) => contact.id);
+}
+
 export async function fetchContactsByIds(contactIds: string[]) {
   const supabase = await createClient();
 
@@ -252,4 +281,58 @@ export async function fetchCampaignsForDistribution(
 
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export type DistributionCampaignSummary = {
+  id: string;
+  name: string;
+  readyCount: number;
+};
+
+export async function fetchDistributionSummary(
+  context: AuthorizationContext,
+): Promise<{
+  totalReady: number;
+  campaigns: DistributionCampaignSummary[];
+}> {
+  const campaigns = await fetchCampaignsForDistribution(context);
+
+  if (campaigns.length === 0) {
+    return { totalReady: 0, campaigns: [] };
+  }
+
+  const supabase = await createClient();
+  const pool = getDistributionPoolFilter(context);
+
+  const summaries = await Promise.all(
+    campaigns.map(async (campaign) => {
+      let query = supabase
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaign.id);
+
+      if (pool === "unassigned") {
+        query = query.eq("assignment_status", "UNASSIGNED");
+      } else {
+        query = query.eq("current_assignee_id", context.telepastor.id);
+      }
+
+      const { count, error } = await query;
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return {
+        id: campaign.id,
+        name: campaign.name,
+        readyCount: count ?? 0,
+      };
+    }),
+  );
+
+  return {
+    totalReady: summaries.reduce((sum, campaign) => sum + campaign.readyCount, 0),
+    campaigns: summaries,
+  };
 }

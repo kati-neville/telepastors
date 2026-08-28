@@ -149,7 +149,10 @@ export function canAccessCampaigns(context: AuthorizationContext): boolean {
 
 export function canAccessMyCalls(context: AuthorizationContext): boolean {
   return (
-    context.telepastor.is_active && context.telepastor.role === "TELEPASTOR"
+    context.telepastor.is_active &&
+    (context.telepastor.role === "GOVERNOR" ||
+      context.telepastor.role === "LEADER" ||
+      context.telepastor.role === "TELEPASTOR")
   );
 }
 

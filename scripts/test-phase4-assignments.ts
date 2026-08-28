@@ -5,6 +5,15 @@ import {
   getDistributionPoolFilter,
   getTargetAssigneeRole,
 } from "@/lib/auth/assignments";
+import {
+  computeEqualSplit,
+  getDefaultRetainCount,
+  partitionContacts,
+  splitPoolForRetention,
+  validateDistributionTotals,
+  validateSplitTotals,
+} from "@/lib/assignments/distribute-equally";
+import { canRetainContactsForCalling } from "@/lib/auth/assignments";
 import type { Telepastor } from "@/types/domain";
 
 function assert(condition: boolean, message: string) {
@@ -261,18 +270,84 @@ function testAssignmentHistoryModel() {
 
 function testBulkAssignmentCounts() {
   const totalContacts = 1000;
-  const assignments = [
-    { governorId: "gov-a", count: 250 },
-    { governorId: "gov-b", count: 250 },
-    { governorId: "gov-c", count: 250 },
-    { governorId: "gov-d", count: 250 },
-  ];
+  const assigneeIds = ["gov-a", "gov-b", "gov-c", "gov-d"];
+  const split = computeEqualSplit(totalContacts, assigneeIds);
 
-  const assignedTotal = assignments.reduce((sum, item) => sum + item.count, 0);
-  assert(assignedTotal === totalContacts, "Bulk assignment covers all contacts");
+  assert(split.get("gov-a") === 250, "Even split for gov-a");
+  assert(split.get("gov-b") === 250, "Even split for gov-b");
+  assert(validateSplitTotals(totalContacts, split), "Split totals match");
+}
+
+function testEqualSplitRemainder() {
+  const assigneeIds = ["lead-a", "lead-b", "lead-c", "lead-d", "lead-e"];
+  const split = computeEqualSplit(1003, assigneeIds);
+
+  assert(split.get("lead-a") === 201, "First assignee gets extra from remainder");
+  assert(split.get("lead-b") === 201, "Second assignee gets extra from remainder");
+  assert(split.get("lead-c") === 201, "Third assignee gets extra from remainder");
+  assert(split.get("lead-d") === 200, "Fourth assignee gets base share");
+  assert(split.get("lead-e") === 200, "Fifth assignee gets base share");
+  assert(validateSplitTotals(1003, split), "Remainder split totals match");
+}
+
+function testPartitionContacts() {
+  const contactIds = ["c-1", "c-2", "c-3", "c-4", "c-5"];
+  const assigneeIds = ["lead-a", "lead-b"];
+  const split = computeEqualSplit(contactIds.length, assigneeIds);
+  const partitions = partitionContacts(contactIds, split, assigneeIds);
+
+  assert(partitions.length === 2, "Two partitions created");
+  assert(partitions[0]!.assigneeId === "lead-a", "First partition assignee");
+  assert(partitions[0]!.contactIds.length === 3, "First partition gets remainder");
+  assert(partitions[1]!.contactIds.length === 2, "Second partition gets base share");
   assert(
-    assignments.every((item) => item.count === 250),
-    "Even distribution across governors",
+    partitions.flatMap((partition) => partition.contactIds).join(",") ===
+      contactIds.join(","),
+    "All contacts partitioned in order",
+  );
+}
+
+function testEqualSplitWithFewerContactsThanAssignees() {
+  const assigneeIds = ["tp-a", "tp-b", "tp-c", "tp-d", "tp-e"];
+  const split = computeEqualSplit(3, assigneeIds);
+
+  assert(split.get("tp-a") === 1, "First telepastor gets one contact");
+  assert(split.get("tp-b") === 1, "Second telepastor gets one contact");
+  assert(split.get("tp-c") === 1, "Third telepastor gets one contact");
+  assert(split.get("tp-d") === 0, "Fourth telepastor gets zero");
+  assert(split.get("tp-e") === 0, "Fifth telepastor gets zero");
+}
+
+function testRetainContactsForCallingRoles() {
+  assert(canRetainContactsForCalling("GOVERNOR"), "Governor can retain contacts");
+  assert(canRetainContactsForCalling("LEADER"), "Leader can retain contacts");
+  assert(!canRetainContactsForCalling("TELEPASTOR"), "Telepastor cannot retain in distribution");
+  assert(!canRetainContactsForCalling("SUPER_ADMIN"), "Super Admin cannot retain in distribution");
+}
+
+function testDefaultRetainCount() {
+  assert(getDefaultRetainCount(1000, true) === 50, "Default retain is 50");
+  assert(getDefaultRetainCount(20, true) === 20, "Default retain capped by pool");
+  assert(getDefaultRetainCount(1000, false) === 0, "Non-retaining roles get zero");
+}
+
+function testSplitPoolForRetention() {
+  const contactIds = ["c-1", "c-2", "c-3", "c-4", "c-5"];
+  const { retained, distributable } = splitPoolForRetention(contactIds, 2);
+
+  assert(retained.join(",") === "c-1,c-2", "Retained contacts come first");
+  assert(distributable.join(",") === "c-3,c-4,c-5", "Remaining contacts are distributable");
+}
+
+function testDistributionTotalsWithRetention() {
+  const assigneeIds = ["lead-a", "lead-b"];
+  const retainCount = 50;
+  const poolTotal = 1000;
+  const split = computeEqualSplit(poolTotal - retainCount, assigneeIds);
+
+  assert(
+    validateDistributionTotals(poolTotal, retainCount, split),
+    "Retain plus downstream split matches pool total",
   );
 }
 
@@ -426,6 +501,13 @@ function main() {
   testContactPoolPermissions();
   testAssignmentHistoryModel();
   testBulkAssignmentCounts();
+  testEqualSplitRemainder();
+  testPartitionContacts();
+  testEqualSplitWithFewerContactsThanAssignees();
+  testRetainContactsForCallingRoles();
+  testDefaultRetainCount();
+  testSplitPoolForRetention();
+  testDistributionTotalsWithRetention();
   testReassignmentPreservesHistory();
   testReassignmentResetsLatestResponse();
   testDownstreamReassignmentPermissions();

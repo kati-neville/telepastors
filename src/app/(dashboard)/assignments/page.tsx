@@ -1,36 +1,80 @@
-import Link from "next/link";
-import { Share2 } from "lucide-react";
+import { Suspense } from "react";
 import { requireAssignmentsAccess } from "@/app/actions/assignments";
-import { CampaignStatusBadge } from "@/components/campaigns/campaign-status-badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AssignmentsDistributionHub } from "@/components/assignments/assignments-distribution-hub";
 import { getAssigneeLabel } from "@/lib/auth/assignments";
-import { fetchCampaignsForDistribution } from "@/lib/queries/assignments";
+import {
+  fetchAssignableMembers,
+  fetchCampaignsForDistribution,
+  fetchDistributionContacts,
+  fetchDistributionStats,
+} from "@/lib/queries/assignments";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default async function AssignmentsPage() {
+type AssignmentsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function getParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = params[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function AssignmentsDistributionSkeleton() {
+  return (
+    <div className="grid gap-4">
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-64 w-full rounded-xl" />
+    </div>
+  );
+}
+
+async function AssignmentsDistributionContent({
+  initialCampaignId,
+}: {
+  initialCampaignId?: string;
+}) {
   const { session, context } = await requireAssignmentsAccess();
-  const campaigns = await fetchCampaignsForDistribution(context);
+  const [campaigns, assignees] = await Promise.all([
+    fetchCampaignsForDistribution(context),
+    fetchAssignableMembers(context),
+  ]);
   const assigneeLabel = getAssigneeLabel(session.telepastor.role);
+
+  const campaignData = await Promise.all(
+    campaigns.map(async (campaign) => ({
+      campaign,
+      stats: await fetchDistributionStats(campaign.id, context),
+      contacts: await fetchDistributionContacts(campaign.id, context, {
+        pool: "all",
+      }),
+    })),
+  );
+
+  const focusedCampaign = initialCampaignId
+    ? campaigns.find((campaign) => campaign.id === initialCampaignId)
+    : campaigns.length === 1
+      ? campaigns[0]
+      : null;
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-heading text-2xl font-semibold tracking-tight">
-          Assignments
+          {focusedCampaign
+            ? `Distribute contacts — ${focusedCampaign.name}`
+            : "Distribute contacts"}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Distribute campaign contacts to {assigneeLabel.toLowerCase()}s in your
-          organization.
+          {focusedCampaign
+            ? `Split contacts equally among ${assigneeLabel.toLowerCase()}s or assign manually. Assignment history is preserved on every transfer.`
+            : `Choose a campaign to assign contacts to ${assigneeLabel.toLowerCase()}s in your organization.`}
         </p>
       </div>
 
-      {campaigns.length === 0 ? (
+      {campaignData.length === 0 ? (
         <div className="rounded-xl border border-dashed px-6 py-12 text-center">
           <h3 className="font-heading text-lg font-semibold">
             No campaigns ready for assignment
@@ -41,38 +85,27 @@ export default async function AssignmentsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-3">
-          {campaigns.map((campaign) => (
-            <Card key={campaign.id}>
-              <CardHeader className="pb-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-2">
-                    <CardTitle className="text-base">{campaign.name}</CardTitle>
-                    <CampaignStatusBadge status={campaign.status} />
-                    {campaign.description ? (
-                      <CardDescription>{campaign.description}</CardDescription>
-                    ) : null}
-                  </div>
-                  <Button
-                    render={
-                      <Link href={`/campaigns/${campaign.id}/distribute`} />
-                    }
-                  >
-                    <Share2 />
-                    Distribute
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Open this campaign to assign contacts to{" "}
-                  {assigneeLabel.toLowerCase()}s.
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <AssignmentsDistributionHub
+          actorRole={session.telepastor.role}
+          assignees={assignees}
+          campaignData={campaignData}
+          initialCampaignId={initialCampaignId}
+          assigneeLabel={assigneeLabel}
+        />
       )}
     </div>
+  );
+}
+
+export default async function AssignmentsPage({
+  searchParams,
+}: AssignmentsPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const initialCampaignId = getParam(resolvedSearchParams, "campaign");
+
+  return (
+    <Suspense fallback={<AssignmentsDistributionSkeleton />}>
+      <AssignmentsDistributionContent initialCampaignId={initialCampaignId} />
+    </Suspense>
   );
 }

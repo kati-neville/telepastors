@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -75,6 +75,15 @@ export function CallQueuePanel({
   const [notes, setNotes] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastSavedContactName, setLastSavedContactName] = useState("");
+
+  const templateItems = useMemo(
+    () =>
+      whatsAppTemplates.map((template) => ({
+        label: template.name,
+        value: template.id,
+      })),
+    [whatsAppTemplates],
+  );
 
   const currentContact = initialContact;
 
@@ -277,6 +286,7 @@ export function CallQueuePanel({
               <Label htmlFor="whatsapp-template">WhatsApp message template</Label>
               <Select
                 value={selectedTemplateId}
+                items={templateItems}
                 onValueChange={(value) => setSelectedTemplateId(value ?? "")}
               >
                 <SelectTrigger id="whatsapp-template" className="w-full">
@@ -349,7 +359,7 @@ export function CallQueuePanel({
         ) : null}
       </AnimatePresence>
 
-      <div className="fixed inset-x-0 bottom-16 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur md:bottom-0">
+      <div className="fixed inset-x-0 bottom-16 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur md:bottom-0 md:left-64">
         <div className="mx-auto flex max-w-lg gap-2">
           <Button
             type="button"

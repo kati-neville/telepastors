@@ -31,17 +31,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     response: getParam(resolvedSearchParams, "response"),
     from: getParam(resolvedSearchParams, "from"),
     to: getParam(resolvedSearchParams, "to"),
+    view: getParam(resolvedSearchParams, "view"),
   });
 
   const data = await fetchLeadershipDashboard(context, filters);
-
   const role = session.telepastor.role as "SUPER_ADMIN" | "GOVERNOR" | "LEADER";
-  const performanceTitle =
-    role === "SUPER_ADMIN"
-      ? "Governor performance"
-      : role === "GOVERNOR"
-        ? "Leader & Telepastor progress"
-        : "Telepastor performance";
 
   return (
     <div className="space-y-6">
@@ -67,8 +61,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
       <LeadershipDashboard
         data={data}
+        role={role}
+        filters={filters}
+        basePath="/reports"
         showFullReportsLink={false}
-        performanceTitle={performanceTitle}
+        showHeader={false}
       />
     </div>
   );

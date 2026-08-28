@@ -1,5 +1,5 @@
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { HeaderAccountMenu } from "@/components/layout/header-account-menu";
+import { UserMenu } from "@/components/layout/user-menu";
 import type { AuthSession } from "@/types/domain";
 import type { VisibleNavItem } from "@/lib/navigation/types";
 
@@ -17,7 +17,7 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 				telepastor={session.telepastor}
 				email={session.email}
 			/>
-			{/* <div className="min-w-0 flex-1">
+			<div className="min-w-0 flex-1">
 				{title ? (
 					<h1 className="truncate font-heading text-lg font-semibold">
 						{title}
@@ -27,11 +27,8 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 						Telepastors Ministry
 					</p>
 				)}
-			</div> */}
-			<HeaderAccountMenu
-				telepastor={session.telepastor}
-				email={session.email}
-			/>
+			</div>
+			<UserMenu telepastor={session.telepastor} email={session.email} />
 		</header>
 	);
 }

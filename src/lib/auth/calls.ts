@@ -1,9 +1,11 @@
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import type { Contact } from "@/types/domain";
 
+const CALLING_ROLES = new Set(["GOVERNOR", "LEADER", "TELEPASTOR"]);
+
 export function canAccessCallQueue(context: AuthorizationContext): boolean {
   return (
-    context.telepastor.is_active && context.telepastor.role === "TELEPASTOR"
+    context.telepastor.is_active && CALLING_ROLES.has(context.telepastor.role)
   );
 }
 
@@ -26,7 +28,7 @@ export function canViewAssignedContact(
     return true;
   }
 
-  if (context.telepastor.role === "TELEPASTOR") {
+  if (canAccessCallQueue(context)) {
     return contact.current_assignee_id === context.telepastor.id;
   }
 

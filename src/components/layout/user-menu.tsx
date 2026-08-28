@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { Loader2, LogOut, UserRound } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { signOutAction } from "@/app/actions/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -54,10 +56,13 @@ export function UserMenu({ telepastor, email }: UserMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button
-            variant="ghost"
-            className="h-auto gap-2 px-2 py-1.5"
+          <button
+            type="button"
             aria-label="Open account menu"
+            className={buttonVariants({
+              variant: "ghost",
+              className: "h-auto gap-2 px-2 py-1.5",
+            })}
           />
         }
       >
@@ -72,24 +77,30 @@ export function UserMenu({ telepastor, email }: UserMenuProps) {
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">{telepastor.name}</span>
-            <span className="text-xs text-muted-foreground">{email}</span>
-            <span className="text-xs text-muted-foreground">
-              {getRoleLabel(telepastor.role)}
-            </span>
-          </div>
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col gap-1">
+              <span className="font-medium">{telepastor.name}</span>
+              <span className="text-xs text-muted-foreground">{email}</span>
+              <span className="text-xs text-muted-foreground">
+                {getRoleLabel(telepastor.role)}
+              </span>
+            </div>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <UserRound className="size-4" />
-          Profile settings (coming soon)
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuItem render={<Link href="/profile" />}>
+            <UserRound className="size-4" />
+            My profile
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <form action={signOutAction}>
-          <SignOutMenuItem />
-        </form>
+        <DropdownMenuGroup>
+          <form action={signOutAction}>
+            <SignOutMenuItem />
+          </form>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

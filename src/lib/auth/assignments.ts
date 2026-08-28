@@ -130,3 +130,7 @@ export function getAssigneeLabel(role: MinistryRole): string {
       return "Assignee";
   }
 }
+
+export function canRetainContactsForCalling(role: MinistryRole): boolean {
+  return role === "GOVERNOR" || role === "LEADER";
+}

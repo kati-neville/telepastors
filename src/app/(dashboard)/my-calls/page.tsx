@@ -10,11 +10,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { canRetainContactsForCalling } from "@/lib/auth/assignments";
 import { fetchCallQueueStats } from "@/lib/queries/calls";
 
 export default async function MyCallsPage() {
   const { session, context } = await requireMyCallsAccess();
   const stats = await fetchCallQueueStats(context);
+  const canRetain = canRetainContactsForCalling(session.telepastor.role);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -23,7 +25,7 @@ export default async function MyCallsPage() {
           My Calls
         </h2>
         <p className="text-sm text-muted-foreground">
-          Work through your assigned contacts quickly from your phone.
+          Work through contacts assigned to you directly from your phone.
         </p>
       </div>
 
@@ -65,8 +67,9 @@ export default async function MyCallsPage() {
             No contacts assigned yet
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Contacts will appear here once your leader assigns them to you,{" "}
-            {session.telepastor.name.split(" ")[0]}.
+            {canRetain
+              ? "Contacts will appear here when you keep names for your own calls during distribution, or when someone assigns them directly to you."
+              : `Contacts will appear here once they are assigned to you, ${session.telepastor.name.split(" ")[0]}.`}
           </p>
         </div>
       ) : null}

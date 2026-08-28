@@ -18,6 +18,22 @@ export const assignContactsSchema = z.object({
 
 export type AssignContactsValues = z.infer<typeof assignContactsSchema>;
 
+export const bulkAssignContactsSchema = z.object({
+  campaignId: z.string().uuid(),
+  retainCount: z.number().int().min(0).default(0),
+  assignments: z
+    .array(
+      z.object({
+        assigneeId: z.string().uuid(),
+        count: z.number().int().min(0),
+      }),
+    )
+    .min(1, "Select at least one assignee"),
+  notes: z.string().trim().optional(),
+});
+
+export type BulkAssignContactsValues = z.infer<typeof bulkAssignContactsSchema>;
+
 export const distributionFilterSchema = z.object({
   q: z.string().optional(),
   pool: z.enum(["all", "unassigned", "assigned", "assigned_to_me"]).default("all"),
