@@ -1,10 +1,12 @@
+import { Suspense } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
-import { BirthdayNoticeBanner } from "@/components/birthdays/birthday-notice-banner";
+import {
+  BirthdayNoticeBannerFallback,
+  BirthdayNoticeBannerLoader,
+} from "@/components/birthdays/birthday-notice-banner-loader";
 import { getVisibleNavItems } from "@/lib/navigation/config";
-import { canAccessBirthdays } from "@/lib/auth/permissions";
-import { fetchBirthdayNotice } from "@/lib/queries/birthdays";
 import { requireAuthSession } from "@/lib/auth/session";
 
 export default async function DashboardLayout({
@@ -14,11 +16,7 @@ export default async function DashboardLayout({
 }>) {
   const session = await requireAuthSession();
   const context = { telepastor: session.telepastor };
-  const birthdayNotice = await fetchBirthdayNotice(context);
-  const navItems = getVisibleNavItems(context, {
-    highlightBirthdaysNav:
-      canAccessBirthdays(context) && birthdayNotice.todaysBirthdays.length > 0,
-  });
+  const navItems = getVisibleNavItems(context);
 
   return (
     <div className="flex h-dvh overflow-hidden">
@@ -30,7 +28,9 @@ export default async function DashboardLayout({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader session={session} navItems={navItems} />
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-24 md:px-8 md:pb-8">
-          <BirthdayNoticeBanner notice={birthdayNotice} context={context} />
+          <Suspense fallback={<BirthdayNoticeBannerFallback />}>
+            <BirthdayNoticeBannerLoader context={context} />
+          </Suspense>
           {children}
         </main>
         <MobileBottomNav items={navItems} />

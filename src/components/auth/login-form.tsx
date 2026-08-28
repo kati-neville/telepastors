@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
+import { AuthRedirectOverlay } from "@/components/auth/auth-redirect-overlay";
 import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [redirectMessage, setRedirectMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const queryError = searchParams.get("error");
@@ -56,6 +58,7 @@ export function LoginForm() {
       }
 
       if (result.mustChangePassword) {
+        setRedirectMessage("Preparing your account...");
         router.replace(
           `/change-password?redirectTo=${encodeURIComponent(redirectTo)}`,
         );
@@ -63,13 +66,16 @@ export function LoginForm() {
         return;
       }
 
+      setRedirectMessage("Opening your workspace...");
       router.replace(redirectTo);
       router.refresh();
     });
   });
 
   return (
-    <Card className="border shadow-sm">
+    <>
+      {redirectMessage ? <AuthRedirectOverlay message={redirectMessage} /> : null}
+      <Card className="border shadow-sm">
       <CardHeader className="space-y-1">
         <CardTitle className="font-heading text-2xl">Sign in</CardTitle>
         <CardDescription>
@@ -133,5 +139,6 @@ export function LoginForm() {
         </form>
       </CardContent>
     </Card>
+    </>
   );
 }

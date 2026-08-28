@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { changePasswordAction } from "@/app/actions/password";
+import { AuthRedirectOverlay } from "@/components/auth/auth-redirect-overlay";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,6 +27,7 @@ export function ChangePasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [redirectMessage, setRedirectMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const redirectTo = searchParams.get("redirectTo") ?? "/dashboard";
 
@@ -47,13 +49,16 @@ export function ChangePasswordForm() {
         return;
       }
 
+      setRedirectMessage("Opening your workspace...");
       router.replace(redirectTo);
       router.refresh();
     });
   });
 
   return (
-    <Card className="border shadow-sm">
+    <>
+      {redirectMessage ? <AuthRedirectOverlay message={redirectMessage} /> : null}
+      <Card className="border shadow-sm">
       <CardHeader className="space-y-1">
         <CardTitle className="font-heading text-2xl">Set a new password</CardTitle>
         <CardDescription>
@@ -122,5 +127,6 @@ export function ChangePasswordForm() {
         </form>
       </CardContent>
     </Card>
+    </>
   );
 }
