@@ -21,6 +21,7 @@ export type Telepastor = {
   occupation: string | null;
   role: MinistryRole;
   is_active: boolean;
+  must_change_password: boolean;
   leader_id: string | null;
   governor_id: string | null;
   created_at: string;
@@ -37,6 +38,20 @@ export type TelepastorSummary = Pick<
 export type TelepastorDirectoryEntry = Telepastor & {
   leader_name: string | null;
   governor_name: string | null;
+};
+
+export type BirthdayEntry = TelepastorDirectoryEntry & {
+  date_of_birth: string;
+  birthdayMonth: number;
+  birthdayDay: number;
+  age: number;
+  birthdayLabel: string;
+};
+
+export type BirthdayNotice = {
+  viewerBirthdayToday: boolean;
+  viewerName: string;
+  todaysBirthdays: BirthdayEntry[];
 };
 
 export type TelepastorDetail = Telepastor & {
@@ -261,13 +276,18 @@ export type FollowUpContact = {
   recordedByName: string;
 };
 
+export type TeamPerformanceBundle = {
+  governorRows: TeamMemberStatistics[];
+  memberRows: TeamMemberStatistics[];
+  members: TelepastorSummary[];
+};
+
 export type LeadershipDashboardData = {
   scopeLabel: string;
   stats: CampaignStatistics;
   activeCampaigns: number;
   contactsWithNotesCount: number;
-  teamPerformance: TeamMemberStatistics[];
-  teamPerformanceView: "governor" | "leader" | "telepastor";
+  teamPerformanceBundle: TeamPerformanceBundle;
   recentActivity: RecentCallActivity[];
   filterOptions: ReportFilterOptions;
 };
@@ -306,11 +326,12 @@ export const SMS_RECIPIENT_STATUSES = [
 export type SmsRecipientStatus = (typeof SMS_RECIPIENT_STATUSES)[number];
 
 export const BROADCAST_RECIPIENT_SCOPES = [
-  "CAMPAIGN",
-  "SELECTED_CONTACTS",
+  "ALL_CONTACTS",
   "GOVERNOR_ORG",
   "LEADER_ORG",
   "TELEPASTOR_ASSIGNMENTS",
+  "CAMPAIGN",
+  "SELECTED_CONTACTS",
   "RESPONSE_TYPE",
 ] as const;
 

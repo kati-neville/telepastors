@@ -1,21 +1,27 @@
 import Link from "next/link";
 import { ArrowRight, MessageSquareText } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function ContactsWithNotesCard({
 	count,
 	href,
+	className,
 }: {
 	count: number;
 	href: string;
+	className?: string;
 }) {
 	return (
 		<Link
 			href={href}
-			className="group relative sm:col-span-1 col-span-2 overflow-hidden rounded-xl border-2 border-amber-400/70 bg-gradient-to-br from-amber-50 via-amber-50/80 to-orange-50 p-4 shadow-md ring-1 ring-amber-200/60 transition hover:border-amber-500 hover:shadow-lg dark:border-amber-600/50 dark:from-amber-950/50 dark:via-amber-950/30 dark:to-orange-950/20 dark:ring-amber-900/40">
+			className={cn(
+				"group block rounded-xl border border-amber-300/70 bg-amber-50 p-4 shadow-sm transition hover:border-amber-400 hover:bg-amber-50/90 dark:border-amber-800/60 dark:bg-amber-950/30 dark:hover:border-amber-700 dark:hover:bg-amber-950/40",
+				className,
+			)}>
 			<div className="flex items-start justify-between gap-3">
-				<div className="space-y-1">
+				<div className="min-w-0 space-y-1">
 					<div className="flex items-center gap-2">
-						<span className="flex size-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
+						<span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300">
 							<MessageSquareText className="size-4" />
 						</span>
 						<p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
@@ -29,7 +35,7 @@ export function ContactsWithNotesCard({
 						Review notes and call directly
 					</p>
 				</div>
-				<ArrowRight className="size-5 shrink-0 text-amber-600 transition group-hover:translate-x-0.5 dark:text-amber-400" />
+				<ArrowRight className="mt-1 size-5 shrink-0 text-amber-600 transition group-hover:translate-x-0.5 dark:text-amber-400" />
 			</div>
 		</Link>
 	);

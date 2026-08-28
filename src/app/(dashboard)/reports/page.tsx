@@ -64,7 +64,6 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         data={data}
         role={role}
         filters={filters}
-        basePath="/reports"
         showFullReportsLink={false}
         showHeader={false}
       />

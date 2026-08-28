@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -13,14 +12,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  buildTeamMemberDrillDownQuery,
-  buildTeamPerformanceScopeHref,
+  applyTeamPerformanceViewChange,
+  buildTeamMemberDrillDownScope,
   canDrillDownFromRow,
 } from "@/lib/reports/team-performance-view";
 import { getRoleLabel } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 import type { MinistryRole, TeamMemberStatistics } from "@/types/domain";
-import type { ReportFilterValues, TeamPerformanceView } from "@/lib/validations/reports";
+import type { TeamPerformanceScope } from "@/lib/reports/team-performance-view";
+import type { TeamPerformanceView } from "@/lib/validations/reports";
 
 type SortKey =
   | "name"
@@ -36,8 +36,8 @@ type TeamPerformancePanelProps = {
   title: string;
   actorRole: MinistryRole;
   view: TeamPerformanceView;
-  filters: ReportFilterValues;
-  basePath: string;
+  scope: TeamPerformanceScope;
+  onDrillDown: (scope: TeamPerformanceScope) => void;
 };
 
 export function TeamPerformancePanel({
@@ -45,8 +45,8 @@ export function TeamPerformancePanel({
   title,
   actorRole,
   view,
-  filters,
-  basePath,
+  scope,
+  onDrillDown,
 }: TeamPerformancePanelProps) {
   const [sortKey, setSortKey] = useState<SortKey>("completion");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -109,8 +109,8 @@ export function TeamPerformancePanel({
             row={row}
             actorRole={actorRole}
             view={view}
-            filters={filters}
-            basePath={basePath}
+            scope={scope}
+            onDrillDown={onDrillDown}
           />
         ))}
       </div>
@@ -174,8 +174,8 @@ export function TeamPerformancePanel({
                 row={row}
                 actorRole={actorRole}
                 view={view}
-                filters={filters}
-                basePath={basePath}
+                scope={scope}
+                onDrillDown={onDrillDown}
               />
             ))}
           </TableBody>
@@ -189,32 +189,35 @@ function PerformanceRow({
   row,
   actorRole,
   view,
-  filters,
-  basePath,
+  scope,
+  onDrillDown,
 }: {
   row: TeamMemberStatistics;
   actorRole: MinistryRole;
   view: TeamPerformanceView;
-  filters: ReportFilterValues;
-  basePath: string;
+  scope: TeamPerformanceScope;
+  onDrillDown: (scope: TeamPerformanceScope) => void;
 }) {
-  const drillDown = buildTeamMemberDrillDownQuery(actorRole, view, row, filters);
-  const href = drillDown
-    ? buildTeamPerformanceScopeHref(basePath, filters, drillDown)
-    : null;
+  const drillDownScope = buildTeamMemberDrillDownScope(
+    actorRole,
+    view,
+    row,
+    scope,
+  );
   const isDrillDown = canDrillDownFromRow(actorRole, view, row);
 
   return (
     <TableRow className={isDrillDown ? "group" : undefined}>
       <TableCell className="font-medium">
-        {href ? (
-          <Link
-            href={href}
+        {drillDownScope ? (
+          <button
+            type="button"
+            onClick={() => onDrillDown(drillDownScope)}
             className="inline-flex items-center gap-1 hover:text-primary"
           >
             {row.memberName}
             <ChevronRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" />
-          </Link>
+          </button>
         ) : (
           row.memberName
         )}
@@ -234,19 +237,21 @@ function PerformanceCard({
   row,
   actorRole,
   view,
-  filters,
-  basePath,
+  scope,
+  onDrillDown,
 }: {
   row: TeamMemberStatistics;
   actorRole: MinistryRole;
   view: TeamPerformanceView;
-  filters: ReportFilterValues;
-  basePath: string;
+  scope: TeamPerformanceScope;
+  onDrillDown: (scope: TeamPerformanceScope) => void;
 }) {
-  const drillDown = buildTeamMemberDrillDownQuery(actorRole, view, row, filters);
-  const href = drillDown
-    ? buildTeamPerformanceScopeHref(basePath, filters, drillDown)
-    : null;
+  const drillDownScope = buildTeamMemberDrillDownScope(
+    actorRole,
+    view,
+    row,
+    scope,
+  );
 
   const content = (
     <>
@@ -270,17 +275,18 @@ function PerformanceCard({
     </>
   );
 
-  if (!href) {
+  if (!drillDownScope) {
     return <div className="rounded-xl border bg-card p-4 shadow-sm">{content}</div>;
   }
 
   return (
-    <Link
-      href={href}
-      className="block rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+    <button
+      type="button"
+      onClick={() => onDrillDown(drillDownScope)}
+      className="block w-full rounded-xl border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
     >
       {content}
-    </Link>
+    </button>
   );
 }
 

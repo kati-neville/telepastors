@@ -28,6 +28,8 @@ export type ColumnMappingValues = z.infer<typeof columnMappingSchema>;
 export const contactsFilterSchema = z.object({
   q: z.string().optional(),
   status: z.enum(["all", "valid"]).default("all"),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 export type ContactsFilterValues = z.infer<typeof contactsFilterSchema>;

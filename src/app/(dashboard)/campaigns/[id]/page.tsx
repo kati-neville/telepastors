@@ -4,6 +4,7 @@ import { ChevronLeft, FileSpreadsheet, Pencil, Share2 } from "lucide-react";
 import { requireCampaignAccess } from "@/app/actions/campaigns";
 import { CampaignStatusBadge } from "@/components/campaigns/campaign-status-badge";
 import { ContactCards } from "@/components/campaigns/contact-cards";
+import { ContactsPagination } from "@/components/campaigns/contacts-pagination";
 import { ContactsSearch } from "@/components/campaigns/contacts-search";
 import {
   ContactsEmptyState,
@@ -54,19 +55,27 @@ async function CampaignContactsSection({
 }) {
   const filters = contactsFilterSchema.parse({
     q: getParam(searchParams, "q"),
+    page: getParam(searchParams, "page"),
+    pageSize: getParam(searchParams, "pageSize"),
   });
 
-  const contacts = await fetchCampaignContacts(campaignId, filters);
+  const result = await fetchCampaignContacts(campaignId, filters);
 
   return (
     <div className="space-y-4">
       <ContactsSearch campaignId={campaignId} />
-      {contacts.length === 0 ? (
+      {result.contacts.length === 0 ? (
         <ContactsEmptyState />
       ) : (
         <>
-          <ContactsTable contacts={contacts} />
-          <ContactCards contacts={contacts} />
+          <ContactsTable contacts={result.contacts} />
+          <ContactCards contacts={result.contacts} />
+          <ContactsPagination
+            page={result.page}
+            pageSize={result.pageSize}
+            total={result.total}
+            totalPages={result.totalPages}
+          />
         </>
       )}
     </div>

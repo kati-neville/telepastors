@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   canAccessBroadcasts,
+  canAccessBirthdays,
   canAccessCampaigns,
   canAccessMyCalls,
   canAccessReports,
@@ -28,6 +29,12 @@ export const NAV_ITEMS: NavItemDefinition[] = [
     href: "/telepastors",
     icon: "users",
     isVisible: canAccessTelepastorsDirectory,
+  },
+  {
+    title: "Birthdays",
+    href: "/birthdays",
+    icon: "cake",
+    isVisible: canAccessBirthdays,
   },
   {
     title: "Campaigns",
@@ -69,12 +76,15 @@ export const NAV_ITEMS: NavItemDefinition[] = [
 
 export function getVisibleNavItems(
   context: AuthorizationContext,
+  options?: { highlightBirthdaysNav?: boolean },
 ): VisibleNavItem[] {
   return NAV_ITEMS.filter((item) => item.isVisible(context)).map(
     (item): VisibleNavItem => ({
       title: item.title,
       href: item.href,
       icon: item.icon,
+      showBirthdayIndicator:
+        item.href === "/birthdays" && options?.highlightBirthdaysNav,
     }),
   );
 }

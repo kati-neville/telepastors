@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createTelepastorAction } from "@/app/actions/telepastors";
+import { TelepastorCredentialsDialogHost } from "@/components/telepastors/telepastor-credentials-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +37,12 @@ export function CreateTelepastorForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<{
+    id: string;
+    name: string;
+    phone: string;
+    temporaryPassword: string;
+  } | null>(null);
 
   const form = useForm<CreateTelepastorValues>({
     resolver: zodResolver(createTelepastorSchema),
@@ -86,12 +93,37 @@ export function CreateTelepastorForm({
       if (!result.success) {
         setServerError(result.error);
         toast.error(result.error);
+        return;
+      }
+
+      if (
+        result.temporaryPassword &&
+        result.phone &&
+        result.name &&
+        result.id
+      ) {
+        setCredentials({
+          id: result.id,
+          name: result.name,
+          phone: result.phone,
+          temporaryPassword: result.temporaryPassword,
+        });
+        toast.success("Telepastor created. Share the temporary password.");
+      } else if (result.id) {
+        router.push(`/telepastors/${result.id}`);
+        router.refresh();
       }
     });
   });
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <>
+      <TelepastorCredentialsDialogHost
+        credentials={credentials}
+        onClose={() => setCredentials(null)}
+      />
+
+      <form onSubmit={onSubmit} className="space-y-6">
       {serverError ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {serverError}
@@ -233,5 +265,6 @@ export function CreateTelepastorForm({
         </Button>
       </div>
     </form>
+    </>
   );
 }

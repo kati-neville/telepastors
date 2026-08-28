@@ -22,6 +22,7 @@ export type Database = {
           occupation: string | null;
           role: "SUPER_ADMIN" | "GOVERNOR" | "LEADER" | "TELEPASTOR";
           is_active: boolean;
+          must_change_password: boolean;
           leader_id: string | null;
           governor_id: string | null;
           created_at: string;
@@ -39,6 +40,7 @@ export type Database = {
           occupation?: string | null;
           role?: "SUPER_ADMIN" | "GOVERNOR" | "LEADER" | "TELEPASTOR";
           is_active?: boolean;
+          must_change_password?: boolean;
           leader_id?: string | null;
           governor_id?: string | null;
           created_at?: string;
@@ -56,6 +58,7 @@ export type Database = {
           occupation?: string | null;
           role?: "SUPER_ADMIN" | "GOVERNOR" | "LEADER" | "TELEPASTOR";
           is_active?: boolean;
+          must_change_password?: boolean;
           leader_id?: string | null;
           governor_id?: string | null;
           created_at?: string;
@@ -326,6 +329,78 @@ export type Database = {
           },
         ];
       };
+      distribution_jobs: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          actor_id: string;
+          status: "pending" | "running" | "completed" | "failed";
+          retain_count: number;
+          pool_total: number;
+          assigned_count: number;
+          reassigned_count: number;
+          progress_completed: number;
+          progress_total: number;
+          plan: Json;
+          result: Json | null;
+          error_message: string | null;
+          created_at: string;
+          started_at: string | null;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          campaign_id: string;
+          actor_id: string;
+          status?: "pending" | "running" | "completed" | "failed";
+          retain_count?: number;
+          pool_total?: number;
+          assigned_count?: number;
+          reassigned_count?: number;
+          progress_completed?: number;
+          progress_total?: number;
+          plan?: Json;
+          result?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          campaign_id?: string;
+          actor_id?: string;
+          status?: "pending" | "running" | "completed" | "failed";
+          retain_count?: number;
+          pool_total?: number;
+          assigned_count?: number;
+          reassigned_count?: number;
+          progress_completed?: number;
+          progress_total?: number;
+          plan?: Json;
+          result?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+          started_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "distribution_jobs_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "telepastors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "distribution_jobs_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       call_attempts: {
         Row: {
           id: string;
@@ -453,6 +528,7 @@ export type Database = {
           message: string;
           campaign_id: string | null;
           recipient_scope:
+            | "ALL_CONTACTS"
             | "CAMPAIGN"
             | "SELECTED_CONTACTS"
             | "GOVERNOR_ORG"
@@ -479,6 +555,7 @@ export type Database = {
           message: string;
           campaign_id?: string | null;
           recipient_scope:
+            | "ALL_CONTACTS"
             | "CAMPAIGN"
             | "SELECTED_CONTACTS"
             | "GOVERNOR_ORG"
@@ -730,6 +807,15 @@ export type Database = {
         Returns: boolean;
       };
       can_view_contact: { Args: { target_contact_id: string }; Returns: boolean };
+      bulk_assign_contacts: {
+        Args: {
+          p_campaign_id: string;
+          p_assignments: Json;
+          p_assigned_by: string;
+          p_notes?: string | null;
+        };
+        Returns: Json;
+      };
       can_record_call_attempt: {
         Args: { target_contact_id: string };
         Returns: boolean;
@@ -765,6 +851,7 @@ export type Database = {
         | "FAILED"
         | "SKIPPED";
       broadcast_recipient_scope:
+        | "ALL_CONTACTS"
         | "CAMPAIGN"
         | "SELECTED_CONTACTS"
         | "GOVERNOR_ORG"

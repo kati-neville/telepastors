@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   getAvailableTeamPerformanceViews,
@@ -12,38 +11,19 @@ import type { TeamPerformanceView } from "@/lib/validations/reports";
 type TeamViewModeSwitcherProps = {
   role: MinistryRole;
   currentView: TeamPerformanceView;
+  onViewChange: (view: TeamPerformanceView) => void;
 };
 
 export function TeamViewModeSwitcher({
   role,
   currentView,
+  onViewChange,
 }: TeamViewModeSwitcherProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const views = getAvailableTeamPerformanceViews(role);
 
   if (views.length <= 1) {
     return null;
   }
-
-  const setView = (view: TeamPerformanceView) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("view", view);
-
-    if (view === "governor") {
-      params.delete("governorId");
-      params.delete("leaderId");
-      params.delete("telepastorId");
-    } else if (view === "leader") {
-      params.delete("leaderId");
-      params.delete("telepastorId");
-    } else {
-      params.delete("telepastorId");
-    }
-
-    router.replace(`${pathname}?${params.toString()}`);
-  };
 
   return (
     <div className="inline-flex rounded-lg border bg-muted/30 p-1">
@@ -51,7 +31,7 @@ export function TeamViewModeSwitcher({
         <button
           key={view}
           type="button"
-          onClick={() => setView(view)}
+          onClick={() => onViewChange(view)}
           className={cn(
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
             currentView === view

@@ -143,6 +143,14 @@ export function canAccessTelepastorsDirectory(
   return hasRoleAtLeast(context.telepastor.role, "LEADER");
 }
 
+export function canAccessBirthdays(context: AuthorizationContext): boolean {
+  return (
+    context.telepastor.role === "SUPER_ADMIN" ||
+    context.telepastor.role === "GOVERNOR" ||
+    context.telepastor.role === "LEADER"
+  );
+}
+
 export function canAccessCampaigns(context: AuthorizationContext): boolean {
   return hasRoleAtLeast(context.telepastor.role, "GOVERNOR");
 }

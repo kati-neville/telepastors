@@ -1,6 +1,27 @@
 import { redirect } from "next/navigation";
+import { isSyntheticTelepastorAuthEmail } from "@/lib/auth/telepastor-auth-email";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthSession, Telepastor } from "@/types/domain";
+
+type RequireAuthSessionOptions = {
+  allowPasswordChangePending?: boolean;
+};
+
+function buildLoginIdentifier(
+  email: string | null,
+  phone: string | null,
+  telepastorPhone: string,
+): string {
+  if (phone) {
+    return phone;
+  }
+
+  if (email && !isSyntheticTelepastorAuthEmail(email)) {
+    return email;
+  }
+
+  return telepastorPhone;
+}
 
 export async function getCurrentUser() {
   const supabase = await createClient();
@@ -37,7 +58,9 @@ export async function getCurrentTelepastor(): Promise<Telepastor | null> {
   return data;
 }
 
-export async function requireAuthSession(): Promise<AuthSession> {
+export async function requireAuthSession(
+  options: RequireAuthSessionOptions = {},
+): Promise<AuthSession> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -62,6 +85,13 @@ export async function requireAuthSession(): Promise<AuthSession> {
     redirect("/login?error=inactive");
   }
 
+  if (
+    telepastor.must_change_password &&
+    !options.allowPasswordChangePending
+  ) {
+    redirect("/change-password");
+  }
+
   const email = user.email ?? null;
   const phone = user.phone ?? null;
 
@@ -69,7 +99,7 @@ export async function requireAuthSession(): Promise<AuthSession> {
     userId: user.id,
     email,
     phone,
-    loginIdentifier: email ?? phone ?? telepastor.phone,
+    loginIdentifier: buildLoginIdentifier(email, phone, telepastor.phone),
     telepastor,
   };
 }

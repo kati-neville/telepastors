@@ -4,6 +4,7 @@ import {
   canDistributeContacts,
 } from "@/lib/auth/assignments";
 import { parseLoginIdentifier } from "@/lib/auth/login-identifier";
+import { getNewPasswordIssues } from "@/lib/validations/password";
 import { canSendSmsBroadcasts, canManageWhatsAppTemplates } from "@/lib/auth/broadcasts";
 import { canAccessCallQueue, canRecordCallAttempt } from "@/lib/auth/calls";
 import { canChangeRole, canViewUser } from "@/lib/auth/permissions";
@@ -36,6 +37,7 @@ function makeTelepastor(
     date_of_birth: null,
     occupation: null,
     is_active: true,
+    must_change_password: false,
     leader_id: null,
     governor_id: null,
     created_at: new Date().toISOString(),
@@ -259,6 +261,14 @@ function testLoginIdentifierParsing() {
   assert(invalid.type === "invalid", "Invalid identifier rejected");
 }
 
+function testPasswordValidation() {
+  const weakIssues = getNewPasswordIssues("abc");
+  assert(weakIssues.length > 0, "Short password rejected");
+
+  const strongIssues = getNewPasswordIssues("abcd");
+  assert(strongIssues.length === 0, "Four character password accepted");
+}
+
 function main() {
   testAuditActionCatalog();
   testErrorSanitization();
@@ -271,6 +281,7 @@ function main() {
   testTemplatePermissions();
   testProfileCompleteness();
   testLoginIdentifierParsing();
+  testPasswordValidation();
   console.log("Phase 8 hardening tests passed.");
 }
 

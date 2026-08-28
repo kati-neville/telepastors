@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, RotateCcw, Share2 } from "lucide-react";
 import { toast } from "sonner";
-import { bulkAssignContactsAction } from "@/app/actions/assignments";
+import {
+	getDistributionJobStatusAction,
+	startDistributionJobAction,
+} from "@/app/actions/assignments";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -15,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -43,6 +47,12 @@ type EqualSplitPanelProps = {
 	assignees: TelepastorSummary[];
 };
 
+type DistributionProgress = {
+	phase: "preparing" | "assigning" | "finalizing" | "completed";
+	completed: number;
+	total: number;
+};
+
 export function EqualSplitPanel({
 	campaignId,
 	actorRole,
@@ -50,7 +60,6 @@ export function EqualSplitPanel({
 	assignees,
 }: EqualSplitPanelProps) {
 	const router = useRouter();
-	const [isPending, startTransition] = useTransition();
 	const assigneeLabel = getAssigneeLabel(actorRole);
 	const assigneeLabelPlural = `${assigneeLabel.toLowerCase()}s`;
 	const canRetain = canRetainContactsForCalling(actorRole);
@@ -75,6 +84,10 @@ export function EqualSplitPanel({
 			initialRetainCount,
 		),
 	);
+	const [dialogOpen, setDialogOpen] = useState(false);
+	const [isDistributing, setIsDistributing] = useState(false);
+	const [progress, setProgress] = useState<DistributionProgress | null>(null);
+	const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
 	const distributableCount = Math.max(0, poolContactCount - retainCount);
 
@@ -93,7 +106,7 @@ export function EqualSplitPanel({
 		poolContactCount > 0 &&
 		sortedAssignees.length > 0 &&
 		totalsMatch &&
-		!isPending;
+		!isDistributing;
 	const retainOnly = canRetain && distributableCount === 0 && retainCount > 0;
 
 	const updateSplitForRetain = (nextRetainCount: number) => {
@@ -127,37 +140,160 @@ export function EqualSplitPanel({
 		updateSplitForRetain(getDefaultRetainCount(poolContactCount, canRetain));
 	};
 
-	const handleDistribute = () => {
+	const handleDialogOpenChange = (open: boolean) => {
+		if (isDistributing && activeJobId) {
+			setDialogOpen(false);
+			return;
+		}
+
+		if (isDistributing) {
+			return;
+		}
+
+		setDialogOpen(open);
+		if (!open) {
+			setProgress(null);
+			setActiveJobId(null);
+		}
+	};
+
+	useEffect(() => {
+		if (!activeJobId) {
+			return;
+		}
+
+		let cancelled = false;
+
+		const pollJob = async () => {
+			const status = await getDistributionJobStatusAction(activeJobId);
+
+			if (cancelled || !status.success || !status.data) {
+				return;
+			}
+
+			const {
+				status: jobStatus,
+				progressCompleted,
+				progressTotal,
+				assignedCount,
+				errorMessage,
+				byAssignee,
+			} = status.data;
+
+			if (jobStatus === "pending") {
+				setProgress(current => ({
+					phase: "preparing",
+					completed: 0,
+					total: current?.total ?? progressTotal,
+				}));
+				return;
+			}
+
+			if (jobStatus === "running") {
+				setProgress({
+					phase: "assigning",
+					completed: progressCompleted,
+					total: progressTotal,
+				});
+				return;
+			}
+
+			if (jobStatus === "completed") {
+				const assigneeCount = byAssignee.filter(item => item.count > 0).length;
+
+				setProgress({
+					phase: "completed",
+					completed: progressTotal,
+					total: progressTotal,
+				});
+				setIsDistributing(false);
+				setActiveJobId(null);
+				setDialogOpen(false);
+				setProgress(null);
+
+				toast.success(
+					retainCount > 0
+						? `${retainCount} kept for your calls. ${assignedCount} contacts distributed among ${assigneeCount || sortedAssignees.length} ${assigneeLabelPlural}.`
+						: `${assignedCount} contacts distributed among ${assigneeCount || sortedAssignees.length} ${assigneeLabelPlural}.`,
+				);
+				router.refresh();
+				return;
+			}
+
+			if (jobStatus === "failed") {
+				setIsDistributing(false);
+				setActiveJobId(null);
+				setProgress(null);
+				toast.error(errorMessage ?? "Distribution failed.");
+				router.refresh();
+			}
+		};
+
+		void pollJob();
+		const intervalId = window.setInterval(() => {
+			void pollJob();
+		}, 1500);
+
+		return () => {
+			cancelled = true;
+			window.clearInterval(intervalId);
+		};
+	}, [
+		activeJobId,
+		assigneeLabelPlural,
+		retainCount,
+		router,
+		sortedAssignees.length,
+	]);
+
+	const handleDistribute = async () => {
 		if (!canDistribute) {
 			return;
 		}
 
-		startTransition(async () => {
-			const result = await bulkAssignContactsAction({
-				campaignId,
-				retainCount: canRetain ? retainCount : 0,
-				assignments: sortedAssignees.map(assignee => ({
-					assigneeId: assignee.id,
-					count: counts[assignee.id] ?? 0,
-				})),
-			});
+		setIsDistributing(true);
+		setProgress({
+			phase: "preparing",
+			completed: 0,
+			total: retainOnly ? retainCount : assignedTotal,
+		});
 
-			if (!result.success) {
-				toast.error(result.error);
+		const requestPayload = {
+			campaignId,
+			retainCount: canRetain ? retainCount : 0,
+			assignments: sortedAssignees.map(assignee => ({
+				assigneeId: assignee.id,
+				count: counts[assignee.id] ?? 0,
+			})),
+		};
+
+		try {
+			const started = await startDistributionJobAction(requestPayload);
+
+			if (!started.success) {
+				toast.error(started.error);
+				if (started.error.includes("pool changed")) {
+					router.refresh();
+				}
+				setIsDistributing(false);
+				setProgress(null);
 				return;
 			}
 
-			const assigneeCount = result.data?.byAssignee.filter(
-				item => item.count > 0,
-			).length;
-
-			toast.success(
-				retainCount > 0
-					? `${retainCount} kept for your calls. ${result.data?.assignedCount ?? assignedTotal} contacts distributed among ${assigneeCount ?? sortedAssignees.length} ${assigneeLabelPlural}.`
-					: `${result.data?.assignedCount ?? assignedTotal} contacts distributed among ${assigneeCount ?? sortedAssignees.length} ${assigneeLabelPlural}.`,
-			);
-			router.refresh();
-		});
+			setActiveJobId(started.data!.jobId);
+			setProgress({
+				phase: "preparing",
+				completed: 0,
+				total: retainOnly ? retainCount : assignedTotal,
+			});
+			toast.message("Distribution started in the background.", {
+				description: "You can close this dialog or leave the page.",
+			});
+		} catch {
+			toast.error("Failed to start distribution.");
+			setIsDistributing(false);
+			setProgress(null);
+		}
 	};
 
 	if (sortedAssignees.length === 0) {
@@ -189,6 +325,13 @@ export function EqualSplitPanel({
 			</Card>
 		);
 	}
+
+	const progressLabel =
+		progress?.phase === "preparing"
+			? "Preparing distribution..."
+			: progress?.phase === "finalizing"
+				? "Finalizing distribution..."
+				: `Assigning contacts (${progress?.completed ?? 0} of ${progress?.total ?? 0})`;
 
 	return (
 		<Card>
@@ -239,6 +382,7 @@ export function EqualSplitPanel({
 							max={poolContactCount}
 							value={retainCount}
 							onChange={event => handleRetainChange(event.target.value)}
+							disabled={isDistributing}
 						/>
 						<p className="text-xs text-muted-foreground">
 							These contacts stay assigned to you for your calls. Default is 50.
@@ -268,6 +412,7 @@ export function EqualSplitPanel({
 									onChange={event =>
 										handleCountChange(assignee.id, event.target.value)
 									}
+									disabled={isDistributing}
 								/>
 							</div>
 						</div>
@@ -289,16 +434,22 @@ export function EqualSplitPanel({
 					</p>
 
 					<div className="flex flex-wrap gap-2">
-						<Button type="button" variant="outline" onClick={resetToEqual}>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={resetToEqual}
+							disabled={isDistributing}>
 							<RotateCcw />
 							Reset to equal
 						</Button>
 
-						<AlertDialog>
+						<AlertDialog
+							open={dialogOpen}
+							onOpenChange={handleDialogOpenChange}>
 							<AlertDialogTrigger
 								render={
 									<Button disabled={!canDistribute}>
-										{isPending ? (
+										{isDistributing ? (
 											<>
 												<Loader2 className="animate-spin" />
 												Distributing...
@@ -317,37 +468,113 @@ export function EqualSplitPanel({
 									</Button>
 								}
 							/>
-							<AlertDialogContent>
-								<AlertDialogHeader>
+							<AlertDialogContent className="w-[calc(100%-1.5rem)] max-w-[calc(100vw-1.5rem)] gap-5 sm:max-w-xl">
+								<AlertDialogHeader className="text-left sm:place-items-start sm:text-left">
 									<AlertDialogTitle>
-										{retainOnly
-											? "Confirm keep for my calls"
-											: "Confirm distribution"}
+										{isDistributing
+											? "Distributing contacts"
+											: retainOnly
+												? "Confirm keep for my calls"
+												: "Confirm distribution"}
 									</AlertDialogTitle>
-									<AlertDialogDescription>
-										{retainOnly
-											? `Keep all ${retainCount} contact${retainCount === 1 ? "" : "s"} assigned to you for your own calls? They will be removed from the distribution queue.`
-											: canRetain && retainCount > 0
-											? `Keep ${retainCount} contacts for your calls and distribute ${assignedTotal} among ${sortedAssignees.length} ${assigneeLabelPlural}? `
-											: `Distribute ${assignedTotal} contacts among ${sortedAssignees.length} ${assigneeLabelPlural}? `}
-										{retainOnly
-											? ""
-											: `${sortedAssignees
-													.map(
-														assignee =>
-															`${assignee.name}: ${counts[assignee.id] ?? 0}`,
-													)
-													.join(" · ")}. Previous assignments will be preserved in history.`}
-									</AlertDialogDescription>
+									{isDistributing ? (
+										<div className="space-y-4 pt-1 text-left text-sm text-muted-foreground">
+											<div className="flex items-center gap-2">
+												<Loader2 className="size-4 animate-spin" />
+												<span>{progressLabel}</span>
+											</div>
+											<Progress
+												value={progress?.completed ?? 0}
+												max={Math.max(progress?.total ?? 1, 1)}
+											/>
+											<p className="text-xs">
+												Distribution runs in the background on the server. You
+												can close this dialog or navigate away. A notification
+												will appear when it finishes.
+											</p>
+										</div>
+									) : (
+										<div className="space-y-4 pt-1 text-left">
+											<AlertDialogDescription>
+												{retainOnly
+													? `Keep all ${retainCount} contact${retainCount === 1 ? "" : "s"} assigned to you for your own calls? They will be removed from the distribution queue.`
+													: canRetain && retainCount > 0
+														? `You are about to keep ${retainCount} contacts for your calls and distribute ${assignedTotal} among ${sortedAssignees.length} ${assigneeLabelPlural}.`
+														: `You are about to distribute ${assignedTotal} contacts among ${sortedAssignees.length} ${assigneeLabelPlural}.`}
+											</AlertDialogDescription>
+
+											{!retainOnly ? (
+												<div className="space-y-3">
+													{canRetain && retainCount > 0 ? (
+														<div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+															<span className="text-muted-foreground">
+																Keep for my calls
+															</span>
+															<span className="font-medium tabular-nums">
+																{retainCount}
+															</span>
+														</div>
+													) : null}
+
+													<div className="overflow-hidden rounded-lg border">
+														<div className="grid grid-cols-[1fr_auto] gap-3 border-b bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">
+															<span>{assigneeLabel}</span>
+															<span>Contacts</span>
+														</div>
+														<div className="max-h-[min(40vh,16rem)] overflow-y-auto sm:max-h-48">
+															{sortedAssignees.map(assignee => {
+																const count = counts[assignee.id] ?? 0;
+
+																return (
+																	<div
+																		key={assignee.id}
+																		className="grid grid-cols-[1fr_auto] items-center gap-3 border-b px-3 py-2.5 text-sm last:border-b-0">
+																		<span className="truncate font-medium">
+																			{assignee.name}
+																		</span>
+																		<span className="font-medium tabular-nums">
+																			{count}
+																		</span>
+																	</div>
+																);
+															})}
+														</div>
+														<div className="grid grid-cols-[1fr_auto] gap-3 border-t bg-muted/20 px-3 py-2 text-sm font-medium">
+															<span>To distribute</span>
+															<span className="tabular-nums">
+																{assignedTotal}
+															</span>
+														</div>
+													</div>
+
+													<p className="text-xs text-muted-foreground">
+														Previous assignments will be preserved in history.
+													</p>
+												</div>
+											) : null}
+										</div>
+									)}
 								</AlertDialogHeader>
 								<AlertDialogFooter>
-									<AlertDialogCancel disabled={isPending}>
+									<AlertDialogCancel disabled={isDistributing}>
 										Cancel
 									</AlertDialogCancel>
 									<AlertDialogAction
-										onClick={handleDistribute}
-										disabled={isPending}>
-										{retainOnly ? "Confirm keep" : "Confirm distribution"}
+										onClick={event => {
+											event.preventDefault();
+											void handleDistribute();
+										}}
+										disabled={isDistributing}>
+										{isDistributing ? (
+											<>
+												<Loader2 className="animate-spin" />
+												Distributing...
+											</>
+										) : retainOnly ? (
+											"Confirm keep"
+										) : (
+											"Confirm distribution"
+										)}
 									</AlertDialogAction>
 								</AlertDialogFooter>
 							</AlertDialogContent>

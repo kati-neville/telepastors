@@ -20,6 +20,8 @@ export function ContactsSearch({ campaignId }: { campaignId: string }) {
       params.set("q", value);
     }
 
+    params.delete("page");
+
     router.replace(params.toString() ? `${pathname}?${params}` : pathname);
   };
 

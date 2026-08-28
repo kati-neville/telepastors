@@ -38,12 +38,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { BROADCAST_SCOPE_DESCRIPTIONS } from "@/lib/broadcasts/labels";
-import { CALL_RESPONSE_LABELS } from "@/lib/config/calling";
-import type { BroadcastRecipientScope, BroadcastPreview } from "@/types/domain";
-import type { BroadcastComposerValues } from "@/lib/validations/broadcasts";
-import { BROADCAST_RECIPIENT_SCOPES } from "@/types/domain";
-
-const SCOPE_LABELS = BROADCAST_SCOPE_DESCRIPTIONS;
 
 type BroadcastFormOptions = {
   campaigns: { id: string; name: string; status: string }[];
@@ -58,7 +52,30 @@ type ContactOption = {
   phone: string;
 };
 
+import { CALL_RESPONSE_LABELS } from "@/lib/config/calling";
+import type { BroadcastRecipientScope, BroadcastPreview } from "@/types/domain";
+import type { BroadcastComposerValues } from "@/lib/validations/broadcasts";
+import { BROADCAST_RECIPIENT_SCOPES } from "@/types/domain";
+
 const ALL_CAMPAIGNS = "__all__";
+const ALL_MEMBERS = "__all__";
+
+function scopeNeedsCampaign(scope: BroadcastRecipientScope) {
+  return (
+    scope === "CAMPAIGN" ||
+    scope === "SELECTED_CONTACTS" ||
+    scope === "RESPONSE_TYPE"
+  );
+}
+
+function scopeOptionalCampaign(scope: BroadcastRecipientScope) {
+  return (
+    scope === "ALL_CONTACTS" ||
+    scope === "GOVERNOR_ORG" ||
+    scope === "LEADER_ORG" ||
+    scope === "TELEPASTOR_ASSIGNMENTS"
+  );
+}
 
 type BroadcastComposerProps = {
   options: BroadcastFormOptions;
@@ -75,12 +92,12 @@ export function BroadcastComposer({
 }: BroadcastComposerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [scope, setScope] = useState<BroadcastRecipientScope>("CAMPAIGN");
+  const [scope, setScope] = useState<BroadcastRecipientScope>("ALL_CONTACTS");
   const [message, setMessage] = useState("");
-  const [campaignId, setCampaignId] = useState("");
-  const [governorId, setGovernorId] = useState("");
-  const [leaderId, setLeaderId] = useState("");
-  const [telepastorId, setTelepastorId] = useState("");
+  const [campaignId, setCampaignId] = useState(ALL_CAMPAIGNS);
+  const [governorId, setGovernorId] = useState(ALL_MEMBERS);
+  const [leaderId, setLeaderId] = useState(ALL_MEMBERS);
+  const [telepastorId, setTelepastorId] = useState(ALL_MEMBERS);
   const [response, setResponse] = useState<string>("");
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(
     new Set(),
@@ -93,18 +110,75 @@ export function BroadcastComposer({
     null,
   );
 
-  const needsCampaign = useMemo(
+  const needsCampaign = useMemo(() => scopeNeedsCampaign(scope), [scope]);
+  const optionalCampaign = useMemo(() => scopeOptionalCampaign(scope), [scope]);
+
+  const scopeItems = useMemo(
     () =>
-      scope === "CAMPAIGN" ||
-      scope === "SELECTED_CONTACTS" ||
-      scope === "RESPONSE_TYPE",
-    [scope],
+      BROADCAST_RECIPIENT_SCOPES.map((item) => ({
+        value: item,
+        label: BROADCAST_SCOPE_DESCRIPTIONS[item],
+      })),
+    [],
   );
 
-  const optionalCampaign =
-    scope === "GOVERNOR_ORG" ||
-    scope === "LEADER_ORG" ||
-    scope === "TELEPASTOR_ASSIGNMENTS";
+  const campaignItems = useMemo(() => {
+    const items = options.campaigns.map((campaign) => ({
+      value: campaign.id,
+      label: campaign.name,
+    }));
+
+    if (optionalCampaign) {
+      return [{ value: ALL_CAMPAIGNS, label: "All campaigns" }, ...items];
+    }
+
+    return items;
+  }, [optionalCampaign, options.campaigns]);
+
+  const governorItems = useMemo(
+    () => [
+      { value: ALL_MEMBERS, label: "All governors" },
+      ...options.governors.map((governor) => ({
+        value: governor.id,
+        label: governor.name,
+      })),
+    ],
+    [options.governors],
+  );
+
+  const leaderItems = useMemo(
+    () => [
+      { value: ALL_MEMBERS, label: "All leaders" },
+      ...options.leaders.map((leader) => ({
+        value: leader.id,
+        label: leader.name,
+      })),
+    ],
+    [options.leaders],
+  );
+
+  const telepastorItems = useMemo(
+    () => [
+      { value: ALL_MEMBERS, label: "All telepastors" },
+      ...options.telepastors.map((telepastor) => ({
+        value: telepastor.id,
+        label: telepastor.name,
+      })),
+    ],
+    [options.telepastors],
+  );
+
+  const responseItems = useMemo(
+    () =>
+      Object.entries(CALL_RESPONSE_LABELS).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    [],
+  );
+
+  const resolvedCampaignId =
+    optionalCampaign && !campaignId ? ALL_CAMPAIGNS : campaignId;
 
   const loadCampaignContacts = (nextCampaignId: string) => {
     if (!nextCampaignId) {
@@ -132,10 +206,22 @@ export function BroadcastComposer({
 
   const handleScopeChange = (nextScope: BroadcastRecipientScope) => {
     setScope(nextScope);
+    setGovernorId(ALL_MEMBERS);
+    setLeaderId(ALL_MEMBERS);
+    setTelepastorId(ALL_MEMBERS);
+
+    if (scopeOptionalCampaign(nextScope)) {
+      setCampaignId((current) =>
+        current && current !== ALL_CAMPAIGNS ? current : ALL_CAMPAIGNS,
+      );
+    } else if (campaignId === ALL_CAMPAIGNS) {
+      setCampaignId("");
+    }
+
     if (nextScope !== "SELECTED_CONTACTS") {
       setCampaignContacts([]);
       setSelectedContactIds(new Set());
-    } else if (campaignId) {
+    } else if (campaignId && campaignId !== ALL_CAMPAIGNS) {
       loadCampaignContacts(campaignId);
     }
   };
@@ -151,10 +237,14 @@ export function BroadcastComposer({
     message: message.trim(),
     scope,
     campaignId:
-      campaignId && campaignId !== ALL_CAMPAIGNS ? campaignId : undefined,
-    governorId: governorId || undefined,
-    leaderId: leaderId || undefined,
-    telepastorId: telepastorId || undefined,
+      resolvedCampaignId && resolvedCampaignId !== ALL_CAMPAIGNS
+        ? resolvedCampaignId
+        : undefined,
+    governorId:
+      governorId && governorId !== ALL_MEMBERS ? governorId : undefined,
+    leaderId: leaderId && leaderId !== ALL_MEMBERS ? leaderId : undefined,
+    telepastorId:
+      telepastorId && telepastorId !== ALL_MEMBERS ? telepastorId : undefined,
     response: response
       ? (response as BroadcastComposerValues["response"])
       : undefined,
@@ -253,25 +343,38 @@ export function BroadcastComposer({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="broadcast-scope">Recipient group</Label>
               <Select
                 value={scope}
+                items={scopeItems}
                 onValueChange={(value) => {
                   if (value) handleScopeChange(value as BroadcastRecipientScope);
                 }}
               >
                 <SelectTrigger id="broadcast-scope" className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Select recipient group" />
                 </SelectTrigger>
                 <SelectContent>
-                  {BROADCAST_RECIPIENT_SCOPES.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {SCOPE_LABELS[item]}
+                  {scopeItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {scope === "ALL_CONTACTS" ? (
+                <p className="text-xs text-muted-foreground">
+                  Sends to every contact in the system.
+                </p>
+              ) : scope === "GOVERNOR_ORG" ||
+                scope === "LEADER_ORG" ||
+                scope === "TELEPASTOR_ASSIGNMENTS" ? (
+                <p className="text-xs text-muted-foreground">
+                  Defaults to the whole group. Narrow to one person only if you
+                  need a subset.
+                </p>
+              ) : null}
             </div>
 
             {(needsCampaign || optionalCampaign) && (
@@ -280,19 +383,21 @@ export function BroadcastComposer({
                   Campaign{needsCampaign ? "" : " (optional filter)"}
                 </Label>
                 <Select
-                  value={
-                    optionalCampaign && !campaignId ? ALL_CAMPAIGNS : campaignId
-                  }
-                  onValueChange={(value) =>
-                    handleCampaignChange(
-                      !value || value === ALL_CAMPAIGNS ? "" : value,
-                    )
-                  }
+                  value={resolvedCampaignId}
+                  items={campaignItems}
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    if (optionalCampaign && value === ALL_CAMPAIGNS) {
+                      setCampaignId(ALL_CAMPAIGNS);
+                      return;
+                    }
+                    handleCampaignChange(value);
+                  }}
                 >
                   <SelectTrigger id="broadcast-campaign" className="w-full">
                     <SelectValue
                       placeholder={
-                        needsCampaign ? "Select campaign" : "All campaigns"
+                        optionalCampaign ? "All campaigns" : "Select campaign"
                       }
                     />
                   </SelectTrigger>
@@ -312,12 +417,17 @@ export function BroadcastComposer({
 
             {scope === "GOVERNOR_ORG" && (
               <div className="space-y-2">
-                <Label htmlFor="broadcast-governor">Governor</Label>
-                <Select value={governorId} onValueChange={(value) => setGovernorId(value ?? "")}>
+                <Label htmlFor="broadcast-governor">Governor (optional)</Label>
+                <Select
+                  value={governorId || ALL_MEMBERS}
+                  items={governorItems}
+                  onValueChange={(value) => setGovernorId(value ?? ALL_MEMBERS)}
+                >
                   <SelectTrigger id="broadcast-governor" className="w-full">
-                    <SelectValue placeholder="Select governor" />
+                    <SelectValue placeholder="All governors" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={ALL_MEMBERS}>All governors</SelectItem>
                     {options.governors.map((governor) => (
                       <SelectItem key={governor.id} value={governor.id}>
                         {governor.name}
@@ -330,12 +440,17 @@ export function BroadcastComposer({
 
             {scope === "LEADER_ORG" && (
               <div className="space-y-2">
-                <Label htmlFor="broadcast-leader">Leader</Label>
-                <Select value={leaderId} onValueChange={(value) => setLeaderId(value ?? "")}>
+                <Label htmlFor="broadcast-leader">Leader (optional)</Label>
+                <Select
+                  value={leaderId || ALL_MEMBERS}
+                  items={leaderItems}
+                  onValueChange={(value) => setLeaderId(value ?? ALL_MEMBERS)}
+                >
                   <SelectTrigger id="broadcast-leader" className="w-full">
-                    <SelectValue placeholder="Select leader" />
+                    <SelectValue placeholder="All leaders" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={ALL_MEMBERS}>All leaders</SelectItem>
                     {options.leaders.map((leader) => (
                       <SelectItem key={leader.id} value={leader.id}>
                         {leader.name}
@@ -348,12 +463,19 @@ export function BroadcastComposer({
 
             {scope === "TELEPASTOR_ASSIGNMENTS" && (
               <div className="space-y-2">
-                <Label htmlFor="broadcast-telepastor">Telepastor</Label>
-                <Select value={telepastorId} onValueChange={(value) => setTelepastorId(value ?? "")}>
+                <Label htmlFor="broadcast-telepastor">Telepastor (optional)</Label>
+                <Select
+                  value={telepastorId || ALL_MEMBERS}
+                  items={telepastorItems}
+                  onValueChange={(value) =>
+                    setTelepastorId(value ?? ALL_MEMBERS)
+                  }
+                >
                   <SelectTrigger id="broadcast-telepastor" className="w-full">
-                    <SelectValue placeholder="Select telepastor" />
+                    <SelectValue placeholder="All telepastors" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={ALL_MEMBERS}>All telepastors</SelectItem>
                     {options.telepastors.map((telepastor) => (
                       <SelectItem key={telepastor.id} value={telepastor.id}>
                         {telepastor.name}
@@ -367,14 +489,18 @@ export function BroadcastComposer({
             {scope === "RESPONSE_TYPE" && (
               <div className="space-y-2">
                 <Label htmlFor="broadcast-response">Response type</Label>
-                <Select value={response} onValueChange={(value) => setResponse(value ?? "")}>
+                <Select
+                  value={response}
+                  items={responseItems}
+                  onValueChange={(value) => setResponse(value ?? "")}
+                >
                   <SelectTrigger id="broadcast-response" className="w-full">
                     <SelectValue placeholder="Select response" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(CALL_RESPONSE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
+                    {responseItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -384,8 +510,8 @@ export function BroadcastComposer({
           </div>
 
           {scope === "SELECTED_CONTACTS" &&
-          campaignId &&
-          campaignId !== ALL_CAMPAIGNS ? (
+          resolvedCampaignId &&
+          resolvedCampaignId !== ALL_CAMPAIGNS ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label>Contacts</Label>
@@ -464,7 +590,7 @@ export function BroadcastComposer({
       </Card>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className="max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="w-[calc(100%-1.5rem)] max-w-[calc(100vw-1.5rem)] max-h-[90vh] gap-5 overflow-y-auto sm:max-w-xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm SMS broadcast</AlertDialogTitle>
             <AlertDialogDescription>

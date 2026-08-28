@@ -1,5 +1,17 @@
-import type { MinistryRole, TeamMemberStatistics } from "@/types/domain";
+import type { MinistryRole, TeamMemberStatistics, TelepastorSummary, TeamPerformanceBundle } from "@/types/domain";
 import type { ReportFilterValues, TeamPerformanceView } from "@/lib/validations/reports";
+import { getGovernorIdForTelepastor } from "@/lib/auth/roles";
+
+export type TeamPerformanceScope = {
+  view: TeamPerformanceView;
+  governorId?: string;
+  leaderId?: string;
+};
+
+export type TeamPerformanceCrumb = {
+  label: string;
+  scope: TeamPerformanceScope;
+};
 
 export const TEAM_PERFORMANCE_VIEW_LABELS: Record<TeamPerformanceView, string> = {
   governor: "Governor",
@@ -102,6 +114,167 @@ export function canDrillDownFromRow(
   }
 
   return false;
+}
+
+export function applyTeamPerformanceViewChange(
+  currentScope: TeamPerformanceScope,
+  nextView: TeamPerformanceView,
+): TeamPerformanceScope {
+  if (nextView === "governor") {
+    return { view: "governor" };
+  }
+
+  if (nextView === "leader") {
+    return {
+      view: "leader",
+      governorId: currentScope.governorId,
+    };
+  }
+
+  return {
+    view: "telepastor",
+    governorId: currentScope.governorId,
+    leaderId: currentScope.leaderId,
+  };
+}
+
+export function buildTeamMemberDrillDownScope(
+  actorRole: MinistryRole,
+  view: TeamPerformanceView,
+  row: TeamMemberStatistics,
+  scope: TeamPerformanceScope,
+): TeamPerformanceScope | null {
+  if (!canDrillDownFromRow(actorRole, view, row)) {
+    return null;
+  }
+
+  if (view === "governor" && row.memberRole === "GOVERNOR") {
+    return {
+      view: "leader",
+      governorId: row.memberId,
+    };
+  }
+
+  if (view === "leader" && row.memberRole === "LEADER") {
+    return {
+      view: "telepastor",
+      governorId: scope.governorId,
+      leaderId: row.memberId,
+    };
+  }
+
+  return null;
+}
+
+export function selectTeamPerformanceRows(
+  bundle: TeamPerformanceBundle,
+  actorRole: MinistryRole,
+  scope: TeamPerformanceScope,
+): TeamMemberStatistics[] {
+  const { view, governorId, leaderId } = scope;
+  const memberById = new Map(bundle.members.map((member) => [member.id, member]));
+
+  if (view === "governor" && actorRole === "SUPER_ADMIN") {
+    return bundle.governorRows;
+  }
+
+  if (view === "leader") {
+    return bundle.memberRows.filter((row) => {
+      if (row.memberRole !== "LEADER") {
+        return false;
+      }
+
+      if (!governorId) {
+        return true;
+      }
+
+      return memberById.get(row.memberId)?.governor_id === governorId;
+    });
+  }
+
+  return bundle.memberRows.filter((row) => {
+    if (row.memberRole !== "TELEPASTOR") {
+      return false;
+    }
+
+    const member = memberById.get(row.memberId);
+    if (!member) {
+      return false;
+    }
+
+    if (leaderId) {
+      return member.leader_id === leaderId;
+    }
+
+    if (governorId) {
+      const leader = member.leader_id
+        ? memberById.get(member.leader_id)
+        : null;
+
+      return getGovernorIdForTelepastor(member, leader) === governorId;
+    }
+
+    return true;
+  });
+}
+
+export function createInitialTeamPerformanceScope(
+  role: MinistryRole,
+  filters: ReportFilterValues,
+): TeamPerformanceScope {
+  return {
+    view: resolveTeamPerformanceView(role, filters.view),
+    governorId: filters.governorId,
+    leaderId: filters.leaderId,
+  };
+}
+
+export function getTeamPerformanceBreadcrumbItems(
+  role: MinistryRole,
+  scope: TeamPerformanceScope,
+  memberNames: {
+    governorName?: string | null;
+    leaderName?: string | null;
+  },
+): TeamPerformanceCrumb[] {
+  const crumbs: TeamPerformanceCrumb[] = [];
+
+  if (role === "SUPER_ADMIN" && scope.governorId) {
+    crumbs.push({
+      label: "All governors",
+      scope: { view: "governor" },
+    });
+
+    if (memberNames.governorName) {
+      crumbs.push({
+        label: memberNames.governorName,
+        scope: {
+          view: "leader",
+          governorId: scope.governorId,
+        },
+      });
+    }
+  }
+
+  if (scope.leaderId && memberNames.leaderName) {
+    if (role === "GOVERNOR") {
+      crumbs.push({
+        label: "All leaders",
+        scope: { view: "leader" },
+      });
+    }
+
+    crumbs.push({
+      label: memberNames.leaderName,
+      scope: {
+        view: "telepastor",
+        governorId: scope.governorId,
+        leaderId: scope.leaderId,
+      },
+    });
+  }
+
+  return crumbs;
 }
 
 export function buildTeamMemberDrillDownQuery(

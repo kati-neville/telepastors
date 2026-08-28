@@ -54,6 +54,14 @@ export function LoginForm() {
         return;
       }
 
+      if (result.mustChangePassword) {
+        router.replace(
+          `/change-password?redirectTo=${encodeURIComponent(redirectTo)}`,
+        );
+        router.refresh();
+        return;
+      }
+
       router.replace(redirectTo);
       router.refresh();
     });

@@ -1,7 +1,16 @@
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { createClient } from "@/lib/supabase/server";
 import { buildContactSearchFilter } from "@/lib/utils/search";
 import type { Contact, ContactImportSummary, ContactWithAssignee, MinistryRole } from "@/types/domain";
 import type { ContactsFilterValues } from "@/lib/validations/campaigns";
+
+export type CampaignContactsResult = {
+  contacts: ContactWithAssignee[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
 
 async function enrichContactsWithAssignees(
   contacts: Contact[],
@@ -47,29 +56,34 @@ export async function fetchExistingNormalizedPhones(
 ): Promise<Set<string>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("contacts")
-    .select("phone_normalized")
-    .eq("campaign_id", campaignId);
+  const phones = await fetchAllPages<{ phone_normalized: string }>(
+    async (from, to) =>
+      supabase
+        .from("contacts")
+        .select("phone_normalized")
+        .eq("campaign_id", campaignId)
+        .range(from, to),
+  );
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return new Set((data ?? []).map((row) => row.phone_normalized));
+  return new Set(phones.map((row) => row.phone_normalized));
 }
 
 export async function fetchCampaignContacts(
   campaignId: string,
   filters: ContactsFilterValues,
-): Promise<ContactWithAssignee[]> {
+): Promise<CampaignContactsResult> {
   const supabase = await createClient();
+  const page = filters.page;
+  const pageSize = filters.pageSize;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
   let query = supabase
     .from("contacts")
-    .select("*")
+    .select("*", { count: "exact" })
     .eq("campaign_id", campaignId)
-    .order("name", { ascending: true });
+    .order("name", { ascending: true })
+    .range(from, to);
 
   const search = filters.q?.trim();
   if (search) {
@@ -79,13 +93,22 @@ export async function fetchCampaignContacts(
     }
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return enrichContactsWithAssignees(data ?? []);
+  const total = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return {
+    contacts: await enrichContactsWithAssignees(data ?? []),
+    total,
+    page,
+    pageSize,
+    totalPages,
+  };
 }
 
 export async function fetchContactImports(

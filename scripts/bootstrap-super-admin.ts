@@ -59,6 +59,7 @@ async function main() {
     address: address || null,
     role: "SUPER_ADMIN",
     is_active: true,
+    must_change_password: false,
   });
 
   if (profileError) {

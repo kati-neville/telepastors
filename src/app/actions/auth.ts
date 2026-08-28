@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 
 type AuthActionResult =
-  | { success: true }
+  | { success: true; mustChangePassword: boolean }
   | { success: false; error: string };
 
 export async function loginAction(
@@ -30,7 +30,21 @@ export async function loginAction(
     return { success: false, error: result.error };
   }
 
-  return { success: true };
+  const { data: telepastor, error: profileError } = await supabase
+    .from("telepastors")
+    .select("must_change_password")
+    .eq("auth_user_id", result.user.id)
+    .maybeSingle();
+
+  if (profileError || !telepastor) {
+    await supabase.auth.signOut();
+    return { success: false, error: "profile_missing" };
+  }
+
+  return {
+    success: true,
+    mustChangePassword: telepastor.must_change_password,
+  };
 }
 
 export async function signOutAction() {

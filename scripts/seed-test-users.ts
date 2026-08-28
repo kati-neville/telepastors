@@ -180,6 +180,7 @@ async function upsertSeedUser(
 		address: spec.address,
 		role: spec.role,
 		is_active: true,
+		must_change_password: false,
 		governor_id: spec.role === "LEADER" ? governorId : null,
 		leader_id: spec.role === "TELEPASTOR" ? leaderId : null,
 	};

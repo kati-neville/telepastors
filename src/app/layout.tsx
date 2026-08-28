@@ -10,8 +10,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Telepastors Ministry",
-    template: "%s | Telepastors Ministry",
+    default: "First Love Church · Telepastors Ministry",
+    template: "%s | First Love Church",
   },
   description:
     "Calling, tracking, and reporting tools for the Telepastors Ministry.",

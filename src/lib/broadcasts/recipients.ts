@@ -58,6 +58,27 @@ function getOrgMemberIds(
     .map((member) => member.id);
 }
 
+function getAllOrgAssigneeIds(
+  members: TelepastorSummary[],
+  mode: "GOVERNOR_ORG" | "LEADER_ORG",
+): string[] {
+  const roots = members.filter((member) =>
+    mode === "GOVERNOR_ORG"
+      ? member.role === "GOVERNOR"
+      : member.role === "LEADER",
+  );
+
+  const assigneeIds = new Set<string>();
+
+  for (const root of roots) {
+    for (const memberId of getOrgMemberIds(members, root.id, mode)) {
+      assigneeIds.add(memberId);
+    }
+  }
+
+  return [...assigneeIds];
+}
+
 async function enrichContacts(
   contacts: Array<{
     id: string;
@@ -97,6 +118,11 @@ export async function resolveBroadcastRecipients(
     .select("id, name, phone, phone_normalized, campaign_id, current_assignee_id, latest_response");
 
   switch (input.scope) {
+    case "ALL_CONTACTS":
+      if (input.campaignId) {
+        query = query.eq("campaign_id", input.campaignId);
+      }
+      break;
     case "CAMPAIGN":
       query = query.eq("campaign_id", input.campaignId!);
       break;
@@ -106,31 +132,36 @@ export async function resolveBroadcastRecipients(
         .in("id", input.contactIds ?? []);
       break;
     case "GOVERNOR_ORG": {
-      const assigneeIds = getOrgMemberIds(
-        members,
-        input.governorId!,
-        "GOVERNOR_ORG",
-      );
+      const assigneeIds = input.governorId
+        ? getOrgMemberIds(members, input.governorId, "GOVERNOR_ORG")
+        : getAllOrgAssigneeIds(members, "GOVERNOR_ORG");
       if (assigneeIds.length === 0) return [];
       query = query.in("current_assignee_id", assigneeIds);
       if (input.campaignId) query = query.eq("campaign_id", input.campaignId);
       break;
     }
     case "LEADER_ORG": {
-      const assigneeIds = getOrgMemberIds(
-        members,
-        input.leaderId!,
-        "LEADER_ORG",
-      );
+      const assigneeIds = input.leaderId
+        ? getOrgMemberIds(members, input.leaderId, "LEADER_ORG")
+        : getAllOrgAssigneeIds(members, "LEADER_ORG");
       if (assigneeIds.length === 0) return [];
       query = query.in("current_assignee_id", assigneeIds);
       if (input.campaignId) query = query.eq("campaign_id", input.campaignId);
       break;
     }
-    case "TELEPASTOR_ASSIGNMENTS":
-      query = query.eq("current_assignee_id", input.telepastorId!);
+    case "TELEPASTOR_ASSIGNMENTS": {
+      if (input.telepastorId) {
+        query = query.eq("current_assignee_id", input.telepastorId);
+      } else {
+        const telepastorIds = members
+          .filter((member) => member.role === "TELEPASTOR")
+          .map((member) => member.id);
+        if (telepastorIds.length === 0) return [];
+        query = query.in("current_assignee_id", telepastorIds);
+      }
       if (input.campaignId) query = query.eq("campaign_id", input.campaignId);
       break;
+    }
     case "RESPONSE_TYPE":
       query = query
         .eq("campaign_id", input.campaignId!)

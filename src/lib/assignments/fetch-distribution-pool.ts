@@ -6,6 +6,7 @@ import {
 import { markContactsHeldForOwnCalls } from "@/lib/assignments/retain-for-calling";
 import { getDistributionPoolFilter } from "@/lib/auth/assignments";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -77,38 +78,35 @@ async function fetchUpstreamPoolContactIds(
     return [];
   }
 
-  const { data, error } = await supabase
-    .from("contacts")
-    .select(
-      `
-      id,
-      assignment_status,
-      current_assignee_id,
-      held_for_own_calls,
-      contact_assignments!contacts_current_assignment_id_fkey (
-        assigned_by,
-        assignee_id,
-        notes
+  const rows = await fetchAllPages<PoolContactRow>(async (from, to) =>
+    supabase
+      .from("contacts")
+      .select(
+        `
+        id,
+        assignment_status,
+        current_assignee_id,
+        held_for_own_calls,
+        contact_assignments!contacts_current_assignment_id_fkey (
+          assigned_by,
+          assignee_id,
+          notes
+        )
+      `,
       )
-    `,
-    )
-    .eq("campaign_id", campaignId)
-    .eq("current_assignee_id", context.telepastor.id)
-    .eq("held_for_own_calls", false)
-    .order("name", { ascending: true });
+      .eq("campaign_id", campaignId)
+      .eq("current_assignee_id", context.telepastor.id)
+      .eq("held_for_own_calls", false)
+      .order("name", { ascending: true })
+      .range(from, to),
+  );
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? [])
+  return rows
     .filter((contact) => {
-      const assignment = normalizeAssignment(
-        (contact as PoolContactRow).contact_assignments,
-      );
+      const assignment = normalizeAssignment(contact.contact_assignments);
 
       return isContactReadyForDownstreamDistribution(
-        contact as PoolContactRow,
+        contact,
         assignment,
         context.telepastor.id,
         pool,
@@ -183,53 +181,47 @@ export async function fetchDistributionPoolContactsForCampaign(
   const supabase = await createClient();
 
   if (pool === "unassigned") {
-    const { data, error } = await supabase
-      .from("contacts")
-      .select("id")
-      .eq("campaign_id", campaignId)
-      .eq("assignment_status", "UNASSIGNED")
-      .order("name", { ascending: true });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return data ?? [];
+    return fetchAllPages<{ id: string }>(async (from, to) =>
+      supabase
+        .from("contacts")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .eq("assignment_status", "UNASSIGNED")
+        .order("name", { ascending: true })
+        .range(from, to),
+    );
   }
 
   await repairRetainedContactsFromAudit(campaignId, context, supabase);
 
-  const { data, error } = await supabase
-    .from("contacts")
-    .select(
-      `
-      id,
-      assignment_status,
-      current_assignee_id,
-      held_for_own_calls,
-      contact_assignments!contacts_current_assignment_id_fkey (
-        assigned_by,
-        assignee_id,
-        notes
+  const rows = await fetchAllPages<PoolContactRow>(async (from, to) =>
+    supabase
+      .from("contacts")
+      .select(
+        `
+        id,
+        assignment_status,
+        current_assignee_id,
+        held_for_own_calls,
+        contact_assignments!contacts_current_assignment_id_fkey (
+          assigned_by,
+          assignee_id,
+          notes
+        )
+      `,
       )
-    `,
-    )
-    .eq("campaign_id", campaignId)
-    .eq("current_assignee_id", context.telepastor.id)
-    .eq("held_for_own_calls", false)
-    .order("name", { ascending: true });
+      .eq("campaign_id", campaignId)
+      .eq("current_assignee_id", context.telepastor.id)
+      .eq("held_for_own_calls", false)
+      .order("name", { ascending: true })
+      .range(from, to),
+  );
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? []).filter((contact) => {
-    const assignment = normalizeAssignment(
-      (contact as PoolContactRow).contact_assignments,
-    );
+  return rows.filter((contact) => {
+    const assignment = normalizeAssignment(contact.contact_assignments);
 
     return isContactReadyForDownstreamDistribution(
-      contact as PoolContactRow,
+      contact,
       assignment,
       context.telepastor.id,
       pool,

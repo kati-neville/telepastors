@@ -61,6 +61,7 @@ export function TelepastorDashboard({
       <RecentActivityPanel
         activity={recentActivity}
         title="Recent call history"
+        viewAllHref="/activity"
       />
     </div>
   );

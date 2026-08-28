@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NavIcon } from "@/components/layout/nav-icon";
-import { cn } from "@/lib/utils";
+import {
+  getNavItemClassName,
+  NavItemLink,
+} from "@/components/layout/nav-item-link";
 import type { VisibleNavItem } from "@/lib/navigation/types";
 
 type MobileBottomNavProps = {
@@ -26,19 +27,14 @@ export function MobileBottomNav({ items }: MobileBottomNavProps) {
             pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
-            <Link
+            <NavItemLink
               key={item.href}
-              href={item.href}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium transition-colors",
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <NavIcon name={item.icon} className="size-5" />
-              <span className="truncate">{item.title}</span>
-            </Link>
+              item={item}
+              isActive={isActive}
+              layout="mobile"
+              iconClassName="size-5"
+              className={getNavItemClassName(isActive, "mobile")}
+            />
           );
         })}
       </div>

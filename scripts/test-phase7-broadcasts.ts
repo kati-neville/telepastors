@@ -35,6 +35,7 @@ function makeTelepastor(
     date_of_birth: null,
     occupation: null,
     is_active: true,
+    must_change_password: false,
     leader_id: null,
     governor_id: null,
     created_at: new Date().toISOString(),

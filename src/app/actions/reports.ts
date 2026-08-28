@@ -7,6 +7,10 @@ import {
   buildTeamPerformanceCsv,
   fetchLeadershipDashboard,
 } from "@/lib/queries/reports";
+import {
+  createInitialTeamPerformanceScope,
+  selectTeamPerformanceRows,
+} from "@/lib/reports/team-performance-view";
 import { reportFilterSchema } from "@/lib/validations/reports";
 
 export async function requireReportsAccess() {
@@ -24,5 +28,14 @@ export async function exportTeamPerformanceCsv(filtersInput: unknown) {
   const { context } = await requireReportsAccess();
   const filters = reportFilterSchema.parse(filtersInput ?? {});
   const data = await fetchLeadershipDashboard(context, filters);
-  return buildTeamPerformanceCsv(data.teamPerformance);
+  const scope = createInitialTeamPerformanceScope(
+    context.telepastor.role,
+    filters,
+  );
+  const rows = selectTeamPerformanceRows(
+    data.teamPerformanceBundle,
+    context.telepastor.role,
+    scope,
+  );
+  return buildTeamPerformanceCsv(rows);
 }

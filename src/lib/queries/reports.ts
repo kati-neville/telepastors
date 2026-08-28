@@ -19,15 +19,52 @@ import type {
   RecentCallActivity,
   ReportFilterOptions,
   TeamMemberStatistics,
+  TeamPerformanceBundle,
   TelepastorSummary,
 } from "@/types/domain";
-import {
-  memberMatchesPerformanceView,
-  resolveTeamPerformanceView,
-} from "@/lib/reports/team-performance-view";
+import { memberMatchesPerformanceView } from "@/lib/reports/team-performance-view";
 import type { ReportFilterValues } from "@/lib/validations/reports";
+import {
+  RECENT_ACTIVITY_PAGE_LIMIT,
+  RECENT_ACTIVITY_PREVIEW_LIMIT,
+} from "@/lib/reports/recent-activity-limit";
 
 type ContactRow = ContactStatRow & { id: string; campaign_id: string };
+
+const CONTACT_ID_BATCH_SIZE = 200;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+
+  return batches;
+}
+
+function throwQueryError(message: string, error: { message?: string | null }) {
+  throw new Error(error.message?.trim() || message);
+}
+
+function applyAttemptDateFilters<
+  T extends {
+    gte: (column: string, value: string) => T;
+    lte: (column: string, value: string) => T;
+  },
+>(query: T, filters: ReportFilterValues) {
+  let nextQuery = query;
+
+  if (filters.from) {
+    nextQuery = nextQuery.gte("attempted_at", filters.from);
+  }
+
+  if (filters.to) {
+    nextQuery = nextQuery.lte("attempted_at", filters.to);
+  }
+
+  return nextQuery;
+}
 
 async function fetchAllMembers(): Promise<TelepastorSummary[]> {
   const supabase = await createClient();
@@ -99,22 +136,25 @@ async function countCallAttempts(
   if (contactIds.length === 0) return 0;
 
   const supabase = await createClient();
-  let query = supabase
-    .from("call_attempts")
-    .select("*", { count: "exact", head: true })
-    .in("contact_id", contactIds);
+  let total = 0;
 
-  if (filters.from) {
-    query = query.gte("attempted_at", filters.from);
+  for (const batch of chunk(contactIds, CONTACT_ID_BATCH_SIZE)) {
+    let query = supabase
+      .from("call_attempts")
+      .select("*", { count: "exact", head: true })
+      .in("contact_id", batch);
+
+    query = applyAttemptDateFilters(query, filters);
+
+    const { count, error } = await query;
+    if (error) {
+      throwQueryError("Failed to count call attempts.", error);
+    }
+
+    total += count ?? 0;
   }
 
-  if (filters.to) {
-    query = query.lte("attempted_at", filters.to);
-  }
-
-  const { count, error } = await query;
-  if (error) throw new Error(error.message);
-  return count ?? 0;
+  return total;
 }
 
 async function countAttemptsByAssignee(
@@ -130,16 +170,27 @@ async function countAttemptsByAssignee(
   }
 
   const supabase = await createClient();
-  let query = supabase
-    .from("call_attempts")
-    .select("contact_id, telepastor_id, attempted_at")
-    .in("contact_id", contactIds);
+  const attempts: Array<{
+    contact_id: string;
+    telepastor_id: string;
+    attempted_at: string;
+  }> = [];
 
-  if (filters.from) query = query.gte("attempted_at", filters.from);
-  if (filters.to) query = query.lte("attempted_at", filters.to);
+  for (const batch of chunk(contactIds, CONTACT_ID_BATCH_SIZE)) {
+    let query = supabase
+      .from("call_attempts")
+      .select("contact_id, telepastor_id, attempted_at")
+      .in("contact_id", batch);
 
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+    query = applyAttemptDateFilters(query, filters);
+
+    const { data, error } = await query;
+    if (error) {
+      throwQueryError("Failed to load call attempts by assignee.", error);
+    }
+
+    attempts.push(...(data ?? []));
+  }
 
   const contactAssignee = new Map(
     contacts.map((contact) => [contact.id, contact.current_assignee_id]),
@@ -148,7 +199,7 @@ async function countAttemptsByAssignee(
   const counts = new Map<string, number>();
   const lastAttempt = new Map<string, string>();
 
-  for (const attempt of data ?? []) {
+  for (const attempt of attempts) {
     const assigneeId = contactAssignee.get(attempt.contact_id);
     if (!assigneeId) continue;
 
@@ -164,11 +215,14 @@ async function countAttemptsByAssignee(
 }
 
 async function fetchRecentActivity(
-  contactIds: string[],
+  contacts: Array<{ id: string; campaign_id: string }>,
   filters: ReportFilterValues,
-  limit = 8,
+  limit = RECENT_ACTIVITY_PREVIEW_LIMIT,
 ): Promise<RecentCallActivity[]> {
-  if (contactIds.length === 0) return [];
+  if (contacts.length === 0) return [];
+
+  const contactIdSet = new Set(contacts.map((contact) => contact.id));
+  const campaignIds = [...new Set(contacts.map((contact) => contact.campaign_id))];
 
   const supabase = await createClient();
   let query = supabase
@@ -176,34 +230,38 @@ async function fetchRecentActivity(
     .select(
       "id, contact_id, campaign_id, telepastor_id, response, notes, attempted_at",
     )
-    .in("contact_id", contactIds)
+    .in("campaign_id", campaignIds)
     .order("attempted_at", { ascending: false })
-    .limit(limit);
+    .limit(Math.max(limit * 10, 50));
 
-  if (filters.from) query = query.gte("attempted_at", filters.from);
-  if (filters.to) query = query.lte("attempted_at", filters.to);
+  query = applyAttemptDateFilters(query, filters);
+  if (filters.response) {
+    query = query.eq("response", filters.response);
+  }
   if (filters.hasNotes) {
     query = query.not("notes", "is", null);
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  if (error) {
+    throwQueryError("Failed to load recent call activity.", error);
+  }
 
-  const attempts = data ?? [];
-  const filteredAttempts = filters.hasNotes
-    ? attempts.filter((attempt) => attempt.notes?.trim())
-    : attempts;
-  const telepastorIds = [...new Set(filteredAttempts.map((a) => a.telepastor_id))];
-  const campaignIds = [...new Set(filteredAttempts.map((a) => a.campaign_id))];
-  const attemptContactIds = [...new Set(filteredAttempts.map((a) => a.contact_id))];
+  const attempts = (data ?? [])
+    .filter((attempt) => contactIdSet.has(attempt.contact_id))
+    .filter((attempt) => !filters.hasNotes || attempt.notes?.trim())
+    .slice(0, limit);
+  const telepastorIds = [...new Set(attempts.map((a) => a.telepastor_id))];
+  const attemptCampaignIds = [...new Set(attempts.map((a) => a.campaign_id))];
+  const attemptContactIds = [...new Set(attempts.map((a) => a.contact_id))];
 
-  const [{ data: telepastors }, { data: campaigns }, { data: contacts }] =
+  const [{ data: telepastors }, { data: campaigns }, { data: contactRecords }] =
     await Promise.all([
       telepastorIds.length
         ? supabase.from("telepastors").select("id, name").in("id", telepastorIds)
         : Promise.resolve({ data: [] }),
-      campaignIds.length
-        ? supabase.from("campaigns").select("id, name").in("id", campaignIds)
+      attemptCampaignIds.length
+        ? supabase.from("campaigns").select("id, name").in("id", attemptCampaignIds)
         : Promise.resolve({ data: [] }),
       attemptContactIds.length
         ? supabase.from("contacts").select("id, name").in("id", attemptContactIds)
@@ -217,10 +275,10 @@ async function fetchRecentActivity(
     (campaigns ?? []).map((entry) => [entry.id, entry.name]),
   );
   const contactMap = new Map(
-    (contacts ?? []).map((entry) => [entry.id, entry.name]),
+    (contactRecords ?? []).map((entry) => [entry.id, entry.name]),
   );
 
-  return filteredAttempts.map((attempt) => ({
+  return attempts.map((attempt) => ({
     id: attempt.id,
     contactName: contactMap.get(attempt.contact_id) ?? "Unknown contact",
     telepastorName: telepastorMap.get(attempt.telepastor_id) ?? "Unknown",
@@ -438,6 +496,67 @@ function buildTeamPerformance(
     .sort((a, b) => b.stats.completed - a.stats.completed);
 }
 
+function stripTeamPerformanceScopeFilters(
+  filters: ReportFilterValues,
+): ReportFilterValues {
+  return {
+    ...filters,
+    view: undefined,
+    governorId: undefined,
+    leaderId: undefined,
+    telepastorId: undefined,
+  };
+}
+
+async function buildTeamPerformanceBundle(
+  context: AuthorizationContext,
+  filters: ReportFilterValues,
+): Promise<TeamPerformanceBundle> {
+  const bundleFilters = stripTeamPerformanceScopeFilters(filters);
+  const allMembers = await fetchAllMembers();
+  const scopedMembers = getReportableMembers(
+    context,
+    bundleFilters,
+    allMembers,
+  );
+  const assigneeIds = getScopedAssigneeIds(scopedMembers);
+
+  let contacts = await fetchContactsForScope(assigneeIds, bundleFilters);
+
+  if (
+    context.telepastor.role === "SUPER_ADMIN" &&
+    !bundleFilters.governorId &&
+    !bundleFilters.leaderId &&
+    !bundleFilters.telepastorId
+  ) {
+    const unassigned = await fetchUnassignedContacts(bundleFilters);
+    contacts = [...contacts, ...unassigned];
+  }
+
+  const attemptData = await countAttemptsByAssignee(contacts, bundleFilters);
+  const performanceMembers = scopedMembers.filter((member) =>
+    memberMatchesPerformanceView(member.role, "telepastor") ||
+    memberMatchesPerformanceView(member.role, "leader"),
+  );
+
+  const memberRows = buildTeamPerformance(
+    performanceMembers,
+    contacts,
+    attemptData,
+  );
+
+  const governorRows =
+    context.telepastor.role === "SUPER_ADMIN"
+      ? buildGovernorPerformance(allMembers, contacts, attemptData)
+      : [];
+
+  return {
+    governorRows,
+    memberRows,
+    members: scopedMembers,
+  };
+}
+
 export async function fetchLeadershipDashboard(
   context: AuthorizationContext,
   filters: ReportFilterValues = {},
@@ -460,7 +579,6 @@ export async function fetchLeadershipDashboard(
   const contactIds = contacts.map((contact) => contact.id);
   const totalCallAttempts = await countCallAttempts(contactIds, filters);
   const stats = computeContactStatistics(contacts, totalCallAttempts);
-  const attemptData = await countAttemptsByAssignee(contacts, filters);
 
   const activeCampaigns = await countActiveCampaignsInScope(
     context,
@@ -468,38 +586,24 @@ export async function fetchLeadershipDashboard(
     filters,
   );
 
-  const view = resolveTeamPerformanceView(
-    context.telepastor.role,
-    filters.view,
-  );
-
-  let teamPerformance: TeamMemberStatistics[];
-
-  if (view === "governor" && context.telepastor.role === "SUPER_ADMIN") {
-    teamPerformance = buildGovernorPerformance(allMembers, contacts, attemptData);
-  } else {
-    const performanceMembers = scopedMembers.filter((member) =>
-      memberMatchesPerformanceView(member.role, view),
-    );
-
-    teamPerformance = buildTeamPerformance(
-      performanceMembers,
-      contacts,
-      attemptData,
-    );
-  }
-
-  const recentActivity = await fetchRecentActivity(contactIds, filters);
-  const contactsWithNotesCount = await countContactsWithNotes(context, filters);
-  const filterOptions = await buildFilterOptions(context, scopedMembers);
+  const [teamPerformanceBundle, recentActivity, contactsWithNotesCount, filterOptions] =
+    await Promise.all([
+      buildTeamPerformanceBundle(context, filters),
+      fetchRecentActivity(
+        contacts,
+        filters,
+        RECENT_ACTIVITY_PREVIEW_LIMIT,
+      ),
+      countContactsWithNotes(context, filters),
+      buildFilterOptions(context, scopedMembers),
+    ]);
 
   return {
     scopeLabel: getReportScopeLabel(context.telepastor.role),
     stats,
     activeCampaigns,
     contactsWithNotesCount,
-    teamPerformance,
-    teamPerformanceView: view,
+    teamPerformanceBundle,
     recentActivity,
     filterOptions,
   };
@@ -611,19 +715,50 @@ function buildGovernorPerformance(
     .sort((a, b) => b.stats.completed - a.stats.completed);
 }
 
+export async function fetchRecentActivityForContext(
+  context: AuthorizationContext,
+  filters: ReportFilterValues,
+  limit = RECENT_ACTIVITY_PAGE_LIMIT,
+): Promise<RecentCallActivity[]> {
+  if (context.telepastor.role === "TELEPASTOR") {
+    return fetchTelepastorRecentActivity(context.telepastor.id, limit);
+  }
+
+  if (!canAccessLeadershipReports(context)) {
+    return [];
+  }
+
+  const allMembers = await fetchAllMembers();
+  const scopedMembers = getReportableMembers(context, filters, allMembers);
+  const assigneeIds = getScopedAssigneeIds(scopedMembers);
+
+  let contacts = await fetchContactsForScope(assigneeIds, filters);
+
+  if (
+    context.telepastor.role === "SUPER_ADMIN" &&
+    !filters.governorId &&
+    !filters.leaderId &&
+    !filters.telepastorId
+  ) {
+    const unassigned = await fetchUnassignedContacts(filters);
+    contacts = [...contacts, ...unassigned];
+  }
+
+  return fetchRecentActivity(contacts, filters, limit);
+}
+
 export async function fetchTelepastorRecentActivity(
   telepastorId: string,
-  limit = 5,
+  limit = RECENT_ACTIVITY_PREVIEW_LIMIT,
 ): Promise<RecentCallActivity[]> {
   const supabase = await createClient();
 
   const { data: contacts } = await supabase
     .from("contacts")
-    .select("id")
+    .select("id, campaign_id")
     .eq("current_assignee_id", telepastorId);
 
-  const contactIds = (contacts ?? []).map((contact) => contact.id);
-  return fetchRecentActivity(contactIds, {}, limit);
+  return fetchRecentActivity(contacts ?? [], {}, limit);
 }
 
 export function buildTeamPerformanceCsv(rows: TeamMemberStatistics[]) {

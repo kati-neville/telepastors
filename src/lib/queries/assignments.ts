@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
+  Contact,
   ContactAssignmentHistoryEntry,
   ContactWithAssignee,
   DistributionStats,
@@ -10,6 +11,7 @@ import type { DistributionFilterValues } from "@/lib/validations/assignments";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import { getDistributionPoolFilter } from "@/lib/auth/assignments";
 import { fetchDistributionPoolContactsForCampaign } from "@/lib/assignments/fetch-distribution-pool";
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { buildContactSearchFilter } from "@/lib/utils/search";
 
 export async function fetchDistributionStats(
@@ -18,31 +20,46 @@ export async function fetchDistributionStats(
 ): Promise<DistributionStats> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("contacts")
-    .select("id, assignment_status, current_assignee_id")
-    .eq("campaign_id", campaignId);
+  const [
+    { count: total, error: totalError },
+    { count: assigned, error: assignedError },
+    { count: unassigned, error: unassignedError },
+  ] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId),
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .neq("assignment_status", "UNASSIGNED"),
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .eq("assignment_status", "UNASSIGNED"),
+  ]);
 
-  if (error) {
-    throw new Error(error.message);
+  if (totalError || assignedError || unassignedError) {
+    throw new Error(
+      totalError?.message ??
+        assignedError?.message ??
+        unassignedError?.message ??
+        "Failed to load assignment stats.",
+    );
   }
 
-  const contacts = data ?? [];
-  const pool = getDistributionPoolFilter(context);
   const poolContacts = await fetchDistributionPoolContactsForCampaign(
     campaignId,
     context,
   );
 
   return {
-    total: contacts.length,
-    assigned: contacts.filter((c) => c.assignment_status !== "UNASSIGNED").length,
-    unassigned: contacts.filter((c) => c.assignment_status === "UNASSIGNED")
-      .length,
-    assignedToMe:
-      pool === "assigned_to_self"
-        ? poolContacts.length
-        : contacts.filter((c) => c.assignment_status === "UNASSIGNED").length,
+    total: total ?? 0,
+    assigned: assigned ?? 0,
+    unassigned: unassigned ?? 0,
+    assignedToMe: poolContacts.length,
   };
 }
 
@@ -54,37 +71,37 @@ export async function fetchDistributionContacts(
   const supabase = await createClient();
   const pool = getDistributionPoolFilter(context);
 
-  let query = supabase
-    .from("contacts")
-    .select("*")
-    .eq("campaign_id", campaignId)
-    .order("name", { ascending: true });
-
-  if (pool === "unassigned") {
-    if (filters.pool === "unassigned" || filters.pool === "all") {
-      if (filters.pool === "unassigned") {
-        query = query.eq("assignment_status", "UNASSIGNED");
-      }
-    } else if (filters.pool === "assigned") {
-      query = query.neq("assignment_status", "UNASSIGNED");
-    }
-  }
-
   const search = filters.q?.trim();
-  if (search) {
-    const filter = buildContactSearchFilter(search);
-    if (filter) {
-      query = query.or(filter);
+
+  const contacts = await fetchAllPages<Contact>(async (from, to) => {
+    let query = supabase
+      .from("contacts")
+      .select("*")
+      .eq("campaign_id", campaignId)
+      .order("name", { ascending: true })
+      .range(from, to);
+
+    if (pool === "unassigned") {
+      if (filters.pool === "unassigned" || filters.pool === "all") {
+        if (filters.pool === "unassigned") {
+          query = query.eq("assignment_status", "UNASSIGNED");
+        }
+      } else if (filters.pool === "assigned") {
+        query = query.neq("assignment_status", "UNASSIGNED");
+      }
     }
-  }
 
-  const { data, error } = await query;
+    if (search) {
+      const filter = buildContactSearchFilter(search);
+      if (filter) {
+        query = query.or(filter);
+      }
+    }
 
-  if (error) {
-    throw new Error(error.message);
-  }
+    return query;
+  });
 
-  let contacts = data ?? [];
+  let visibleContacts = contacts;
 
   if (pool === "assigned_to_self") {
     const poolContacts = await fetchDistributionPoolContactsForCampaign(
@@ -92,12 +109,12 @@ export async function fetchDistributionContacts(
       context,
     );
     const poolIds = new Set(poolContacts.map((contact) => contact.id));
-    contacts = contacts.filter((contact) => poolIds.has(contact.id));
+    visibleContacts = contacts.filter((contact) => poolIds.has(contact.id));
   }
 
   const assigneeIds = [
     ...new Set(
-      contacts
+      visibleContacts
         .map((c) => c.current_assignee_id)
         .filter((value): value is string => Boolean(value)),
     ),
@@ -114,7 +131,7 @@ export async function fetchDistributionContacts(
     (assignees ?? []).map((a) => [a.id, { name: a.name, role: a.role }]),
   );
 
-  return contacts.map((contact) => {
+  return visibleContacts.map((contact) => {
     const assignee = contact.current_assignee_id
       ? assigneeMap.get(contact.current_assignee_id)
       : null;

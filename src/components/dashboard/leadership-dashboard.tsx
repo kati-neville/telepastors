@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stats/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildContactsWithNotesHref } from "@/lib/reports/contacts-with-notes-url";
+import { buildActivityHref } from "@/lib/reports/activity-url";
 import type { LeadershipDashboardData, MinistryRole } from "@/types/domain";
 import type { ReportFilterValues } from "@/lib/validations/reports";
 
@@ -16,18 +17,17 @@ export function LeadershipDashboard({
   data,
   role,
   filters,
-  basePath,
   showFullReportsLink = true,
   showHeader = true,
 }: {
   data: LeadershipDashboardData;
   role: MinistryRole;
   filters: ReportFilterValues;
-  basePath: string;
   showFullReportsLink?: boolean;
   showHeader?: boolean;
 }) {
   const contactsWithNotesHref = buildContactsWithNotesHref(filters);
+  const activityHref = buildActivityHref(filters);
   return (
     <div className="space-y-6">
       {showHeader ? (
@@ -78,16 +78,17 @@ export function LeadershipDashboard({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ResponseBreakdown stats={data.stats} />
-        <RecentActivityPanel activity={data.recentActivity} />
+        <RecentActivityPanel
+          activity={data.recentActivity}
+          viewAllHref={activityHref}
+        />
       </div>
 
       <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
         <TeamPerformanceSection
-          rows={data.teamPerformance}
-          view={data.teamPerformanceView}
+          bundle={data.teamPerformanceBundle}
           role={role}
           filters={filters}
-          basePath={basePath}
           filterOptions={data.filterOptions}
         />
       </Suspense>

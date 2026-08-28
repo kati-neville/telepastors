@@ -17,6 +17,7 @@ export function CampaignStatsOverview({
         <ContactsWithNotesCard
           count={contactsWithNotesCount}
           href={contactsWithNotesHref}
+          className="col-span-2"
         />
       ) : null}
       <StatCard label="Total contacts" value={stats.totalContacts} />

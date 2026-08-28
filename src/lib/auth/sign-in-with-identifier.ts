@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { buildTelepastorAuthEmail } from "@/lib/auth/telepastor-auth-email";
 import { findTelepastorByNormalizedPhone } from "@/lib/auth/find-telepastor-by-phone";
 import { parseLoginIdentifier } from "@/lib/auth/login-identifier";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
@@ -111,17 +112,10 @@ export async function signInWithIdentifier(
   }
 
   const authUser = authUserData.user;
-
-  if (authUser.phone) {
-    return { success: false, error: "invalid_credentials" };
-  }
-
-  if (!authUser.email) {
-    return { success: false, error: "invalid_credentials" };
-  }
+  const authEmail = authUser.email ?? buildTelepastorAuthEmail(telepastor.id);
 
   const emailAttempt = await signInWithPasswordCredentials(supabase, {
-    email: authUser.email,
+    email: authEmail,
     password,
   });
 

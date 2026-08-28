@@ -16,6 +16,11 @@ import {
   canToggleTelepastorActive,
   canViewUser,
 } from "@/lib/auth/permissions";
+import { getDefaultTelepastorPassword } from "@/lib/auth/default-password";
+import {
+  deleteAuthUser,
+  provisionTelepastorAuthUser,
+} from "@/lib/auth/provision-auth-user";
 import { requireAuthSession } from "@/lib/auth/session";
 import { getTelepastorPhoneNormalized } from "@/lib/telepastors/phone";
 import { toActionErrorMessage } from "@/lib/errors/client-message";
@@ -31,7 +36,13 @@ import {
 } from "@/lib/validations/telepastors";
 
 type ActionResult =
-  | { success: true; id?: string }
+  | {
+      success: true;
+      id?: string;
+      temporaryPassword?: string;
+      phone?: string;
+      name?: string;
+    }
   | { success: false; error: string };
 
 function revalidateTelepastorPaths(id?: string) {
@@ -101,6 +112,7 @@ export async function createTelepastorAction(
       leader_id: hierarchy.leader_id,
       governor_id: hierarchy.governor_id,
       is_active: true,
+      must_change_password: true,
     })
     .select("id")
     .single();
@@ -112,6 +124,44 @@ export async function createTelepastorAction(
     };
   }
 
+  const temporaryPassword = getDefaultTelepastorPassword();
+
+  try {
+    const { authUserId } = await provisionTelepastorAuthUser({
+      telepastorId: data.id,
+      phoneNormalized,
+      password: temporaryPassword,
+    });
+
+    const { error: linkError } = await supabase
+      .from("telepastors")
+      .update({
+        auth_user_id: authUserId,
+      })
+      .eq("id", data.id);
+
+    if (linkError) {
+      await deleteAuthUser(authUserId);
+      await supabase.from("telepastors").delete().eq("id", data.id);
+      return {
+        success: false,
+        error: toActionErrorMessage(
+          linkError,
+          "Unable to link the new sign-in account.",
+        ),
+      };
+    }
+  } catch (provisionError) {
+    await supabase.from("telepastors").delete().eq("id", data.id);
+    return {
+      success: false,
+      error:
+        provisionError instanceof Error
+          ? provisionError.message
+          : "Unable to create the sign-in account.",
+    };
+  }
+
   await recordAuditEvent({
     actorId: session.telepastor.id,
     action: AUDIT_ACTIONS.TELEPASTOR_CREATED,
@@ -120,11 +170,19 @@ export async function createTelepastorAction(
     metadata: {
       name: parsed.data.name,
       role: parsed.data.role,
+      accountProvisioned: true,
     },
   });
 
   revalidateTelepastorPaths(data.id);
-  redirect(`/telepastors/${data.id}`);
+
+  return {
+    success: true,
+    id: data.id,
+    temporaryPassword,
+    phone: parsed.data.phone,
+    name: parsed.data.name,
+  };
 }
 
 export async function updateTelepastorProfileAction(

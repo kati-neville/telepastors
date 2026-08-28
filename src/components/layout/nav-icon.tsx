@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  Cake,
   FolderKanban,
   LayoutDashboard,
   Megaphone,
@@ -16,6 +17,7 @@ import type { NavIconName } from "@/lib/navigation/types";
 const NAV_ICONS: Record<NavIconName, LucideIcon> = {
   "layout-dashboard": LayoutDashboard,
   users: Users,
+  cake: Cake,
   "folder-kanban": FolderKanban,
   "share-2": Share2,
   "phone-call": PhoneCall,

@@ -36,30 +36,6 @@ export const broadcastComposerSchema = z
       });
     }
 
-    if (values.scope === "GOVERNOR_ORG" && !values.governorId) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Select a governor.",
-        path: ["governorId"],
-      });
-    }
-
-    if (values.scope === "LEADER_ORG" && !values.leaderId) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Select a leader.",
-        path: ["leaderId"],
-      });
-    }
-
-    if (values.scope === "TELEPASTOR_ASSIGNMENTS" && !values.telepastorId) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Select a telepastor.",
-        path: ["telepastorId"],
-      });
-    }
-
     if (values.scope === "RESPONSE_TYPE" && !values.response) {
       ctx.addIssue({
         code: "custom",

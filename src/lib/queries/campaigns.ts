@@ -85,19 +85,22 @@ export async function fetchCampaignSummaries(): Promise<
   }
 
   const campaignIds = campaigns.map((campaign) => campaign.id);
-  const { data, error } = await supabase
-    .from("contacts")
-    .select("campaign_id")
-    .in("campaign_id", campaignIds);
+  const counts = await Promise.all(
+    campaignIds.map(async (campaignId) => {
+      const { count, error } = await supabase
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("campaign_id", campaignId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+      if (error) {
+        throw new Error(error.message);
+      }
 
-  const countMap = new Map<string, number>();
-  for (const row of data ?? []) {
-    countMap.set(row.campaign_id, (countMap.get(row.campaign_id) ?? 0) + 1);
-  }
+      return [campaignId, count ?? 0] as const;
+    }),
+  );
+
+  const countMap = new Map(counts);
 
   return campaigns.map((campaign) => ({
     ...campaign,

@@ -15,6 +15,7 @@ export const AUDIT_ACTIONS = {
   SMS_BROADCAST_INITIATED: "sms.broadcast_initiated",
   WHATSAPP_TEMPLATE_SAVED: "whatsapp_template.saved",
   WHATSAPP_TEMPLATE_DEFAULT_CHANGED: "whatsapp_template.default_changed",
+  PASSWORD_CHANGED: "auth.password_changed",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

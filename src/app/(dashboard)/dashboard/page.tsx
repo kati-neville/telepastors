@@ -20,6 +20,8 @@ import {
 	fetchLeadershipDashboard,
 	fetchTelepastorRecentActivity,
 } from "@/lib/queries/reports";
+import { buildActivityHref } from "@/lib/reports/activity-url";
+import { RECENT_ACTIVITY_PREVIEW_LIMIT } from "@/lib/reports/recent-activity-limit";
 import { reportFilterSchema } from "@/lib/validations/reports";
 
 type DashboardPageProps = {
@@ -60,7 +62,10 @@ export default async function DashboardPage({
 	if (telepastor.role === "TELEPASTOR") {
 		const [stats, recentActivity, contactsWithNotesCount] = await Promise.all([
 			fetchCallQueueStats(context),
-			fetchTelepastorRecentActivity(telepastor.id),
+			fetchTelepastorRecentActivity(
+				telepastor.id,
+				RECENT_ACTIVITY_PREVIEW_LIMIT,
+			),
 			countContactsWithNotes(context),
 		]);
 
@@ -96,7 +101,6 @@ export default async function DashboardPage({
 					data={data}
 					role={telepastor.role}
 					filters={filters}
-					basePath="/dashboard"
 				/>
 			</div>
 		);

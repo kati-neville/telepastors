@@ -17,7 +17,8 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 				telepastor={session.telepastor}
 				email={session.loginIdentifier}
 			/>
-			<div className="min-w-0 flex-1">
+
+			<div className="hidden min-w-0 flex-1 md:block">
 				{title ? (
 					<h1 className="truncate font-heading text-lg font-semibold">
 						{title}
@@ -28,7 +29,10 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 					</p>
 				)}
 			</div>
-			<UserMenu telepastor={session.telepastor} email={session.loginIdentifier} />
+			<UserMenu
+				telepastor={session.telepastor}
+				email={session.loginIdentifier}
+			/>
 		</header>
 	);
 }
