@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { updateTelepastorProfileAction } from "@/app/actions/telepastors";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -101,7 +102,15 @@ export function EditTelepastorProfileForm({
 
         <div className="space-y-2">
           <Label htmlFor="date_of_birth">Date of birth</Label>
-          <Input id="date_of_birth" type="date" {...form.register("date_of_birth")} />
+          <DatePicker
+            id="date_of_birth"
+            value={form.watch("date_of_birth") ?? ""}
+            onChange={(value) =>
+              form.setValue("date_of_birth", value, { shouldDirty: true })
+            }
+            placeholder="Select date of birth"
+            toDate={new Date()}
+          />
         </div>
 
         <div className="space-y-2">

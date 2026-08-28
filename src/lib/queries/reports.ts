@@ -3,7 +3,9 @@ import {
   getReportableMembers,
   getReportScopeLabel,
   getScopedAssigneeIds,
+  canAccessLeadershipReports,
 } from "@/lib/auth/reports";
+import { canAccessMyCalls } from "@/lib/auth/permissions";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import { getGovernorIdForTelepastor } from "@/lib/auth/roles";
 import {
@@ -12,6 +14,7 @@ import {
   type ContactStatRow,
 } from "@/lib/stats/compute";
 import type {
+  FollowUpContact,
   LeadershipDashboardData,
   RecentCallActivity,
   ReportFilterOptions,
@@ -170,21 +173,29 @@ async function fetchRecentActivity(
   const supabase = await createClient();
   let query = supabase
     .from("call_attempts")
-    .select("id, contact_id, campaign_id, telepastor_id, response, attempted_at")
+    .select(
+      "id, contact_id, campaign_id, telepastor_id, response, notes, attempted_at",
+    )
     .in("contact_id", contactIds)
     .order("attempted_at", { ascending: false })
     .limit(limit);
 
   if (filters.from) query = query.gte("attempted_at", filters.from);
   if (filters.to) query = query.lte("attempted_at", filters.to);
+  if (filters.hasNotes) {
+    query = query.not("notes", "is", null);
+  }
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   const attempts = data ?? [];
-  const telepastorIds = [...new Set(attempts.map((a) => a.telepastor_id))];
-  const campaignIds = [...new Set(attempts.map((a) => a.campaign_id))];
-  const attemptContactIds = [...new Set(attempts.map((a) => a.contact_id))];
+  const filteredAttempts = filters.hasNotes
+    ? attempts.filter((attempt) => attempt.notes?.trim())
+    : attempts;
+  const telepastorIds = [...new Set(filteredAttempts.map((a) => a.telepastor_id))];
+  const campaignIds = [...new Set(filteredAttempts.map((a) => a.campaign_id))];
+  const attemptContactIds = [...new Set(filteredAttempts.map((a) => a.contact_id))];
 
   const [{ data: telepastors }, { data: campaigns }, { data: contacts }] =
     await Promise.all([
@@ -209,14 +220,156 @@ async function fetchRecentActivity(
     (contacts ?? []).map((entry) => [entry.id, entry.name]),
   );
 
-  return attempts.map((attempt) => ({
+  return filteredAttempts.map((attempt) => ({
     id: attempt.id,
     contactName: contactMap.get(attempt.contact_id) ?? "Unknown contact",
     telepastorName: telepastorMap.get(attempt.telepastor_id) ?? "Unknown",
     response: attempt.response,
+    notes: attempt.notes,
     attemptedAt: attempt.attempted_at,
     campaignName: campaignMap.get(attempt.campaign_id) ?? "Unknown campaign",
   }));
+}
+
+async function fetchFollowUpContacts(
+  assigneeIds: string[] | null,
+  filters: ReportFilterValues,
+  limit = 50,
+): Promise<FollowUpContact[]> {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("contacts")
+    .select(
+      "id, name, phone, phone_normalized, campaign_id, latest_response, latest_notes, latest_response_at, current_assignee_id, latest_recorded_by",
+    )
+    .not("latest_notes", "is", null)
+    .order("latest_response_at", { ascending: false })
+    .limit(limit);
+
+  if (assigneeIds && assigneeIds.length > 0) {
+    query = query.in("current_assignee_id", assigneeIds);
+  } else if (assigneeIds && assigneeIds.length === 0) {
+    return [];
+  }
+
+  if (filters.campaignId) {
+    query = query.eq("campaign_id", filters.campaignId);
+  }
+
+  if (filters.response) {
+    query = query.eq("latest_response", filters.response);
+  }
+
+  if (filters.from) {
+    query = query.gte("latest_response_at", filters.from);
+  }
+
+  if (filters.to) {
+    query = query.lte("latest_response_at", filters.to);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const contacts = (data ?? []).filter(
+    (contact) => contact.latest_notes && contact.latest_notes.trim().length > 0,
+  );
+
+  if (contacts.length === 0) {
+    return [];
+  }
+
+  const campaignIds = [...new Set(contacts.map((contact) => contact.campaign_id))];
+  const assigneeIdsFromContacts = [
+    ...new Set(
+      contacts
+        .map((contact) => contact.current_assignee_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const recorderIds = [
+    ...new Set(
+      contacts
+        .map((contact) => contact.latest_recorded_by)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const telepastorLookupIds = [
+    ...new Set([...assigneeIdsFromContacts, ...recorderIds]),
+  ];
+
+  const [{ data: campaigns }, { data: telepastors }] = await Promise.all([
+    campaignIds.length
+      ? supabase.from("campaigns").select("id, name").in("id", campaignIds)
+      : Promise.resolve({ data: [] }),
+    telepastorLookupIds.length
+      ? supabase
+          .from("telepastors")
+          .select("id, name")
+          .in("id", telepastorLookupIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const campaignMap = new Map(
+    (campaigns ?? []).map((entry) => [entry.id, entry.name]),
+  );
+  const telepastorMap = new Map(
+    (telepastors ?? []).map((entry) => [entry.id, entry.name]),
+  );
+
+  return contacts.map((contact) => ({
+    id: contact.id,
+    name: contact.name,
+    phone: contact.phone,
+    phoneNormalized: contact.phone_normalized,
+    currentAssigneeId: contact.current_assignee_id,
+    campaignName: campaignMap.get(contact.campaign_id) ?? "Unknown campaign",
+    latestResponse: contact.latest_response,
+    latestNotes: contact.latest_notes!.trim(),
+    latestResponseAt: contact.latest_response_at,
+    assigneeName: contact.current_assignee_id
+      ? (telepastorMap.get(contact.current_assignee_id) ?? "Unassigned")
+      : "Unassigned",
+    recordedByName: contact.latest_recorded_by
+      ? (telepastorMap.get(contact.latest_recorded_by) ?? "Unknown")
+      : "Unknown",
+  }));
+}
+
+export async function fetchContactsWithNotes(
+  context: AuthorizationContext,
+  filters: ReportFilterValues = {},
+): Promise<FollowUpContact[]> {
+  if (canAccessLeadershipReports(context)) {
+    const allMembers = await fetchAllMembers();
+    const scopedMembers = getReportableMembers(context, filters, allMembers);
+    const assigneeIds = getScopedAssigneeIds(scopedMembers);
+    return fetchFollowUpContacts(assigneeIds, filters, 10_000);
+  }
+
+  if (canAccessMyCalls(context)) {
+    return fetchFollowUpContacts([context.telepastor.id], filters, 10_000);
+  }
+
+  return [];
+}
+
+export async function countContactsWithNotes(
+  context: AuthorizationContext,
+  filters: ReportFilterValues = {},
+): Promise<number> {
+  const contacts = await fetchContactsWithNotes(context, filters);
+  return contacts.length;
+}
+
+export async function fetchReportFilterOptions(
+  context: AuthorizationContext,
+  filters: ReportFilterValues = {},
+): Promise<ReportFilterOptions> {
+  const allMembers = await fetchAllMembers();
+  const scopedMembers = getReportableMembers(context, filters, allMembers);
+  return buildFilterOptions(context, scopedMembers);
 }
 
 async function buildFilterOptions(
@@ -337,12 +490,14 @@ export async function fetchLeadershipDashboard(
   }
 
   const recentActivity = await fetchRecentActivity(contactIds, filters);
+  const contactsWithNotesCount = await countContactsWithNotes(context, filters);
   const filterOptions = await buildFilterOptions(context, scopedMembers);
 
   return {
     scopeLabel: getReportScopeLabel(context.telepastor.role),
     stats,
     activeCampaigns,
+    contactsWithNotesCount,
     teamPerformance,
     teamPerformanceView: view,
     recentActivity,

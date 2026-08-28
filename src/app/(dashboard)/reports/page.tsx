@@ -32,6 +32,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     from: getParam(resolvedSearchParams, "from"),
     to: getParam(resolvedSearchParams, "to"),
     view: getParam(resolvedSearchParams, "view"),
+    hasNotes: getParam(resolvedSearchParams, "hasNotes") === "true" ? "true" : undefined,
   });
 
   const data = await fetchLeadershipDashboard(context, filters);

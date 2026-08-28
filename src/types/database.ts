@@ -15,6 +15,7 @@ export type Database = {
           auth_user_id: string | null;
           name: string;
           phone: string;
+          phone_normalized: string | null;
           address: string | null;
           profile_picture_url: string | null;
           date_of_birth: string | null;
@@ -31,6 +32,7 @@ export type Database = {
           auth_user_id?: string | null;
           name: string;
           phone: string;
+          phone_normalized: string | null;
           address?: string | null;
           profile_picture_url?: string | null;
           date_of_birth?: string | null;
@@ -47,6 +49,7 @@ export type Database = {
           auth_user_id?: string | null;
           name?: string;
           phone?: string;
+          phone_normalized?: string | null;
           address?: string | null;
           profile_picture_url?: string | null;
           date_of_birth?: string | null;
@@ -140,6 +143,10 @@ export type Database = {
             | "WRONG_NUMBER"
             | "OTHER"
             | null;
+          latest_notes: string | null;
+          latest_response_at: string | null;
+          latest_recorded_by: string | null;
+          held_for_own_calls: boolean;
           assignment_status:
             | "UNASSIGNED"
             | "ASSIGNED"
@@ -166,6 +173,10 @@ export type Database = {
             | "WRONG_NUMBER"
             | "OTHER"
             | null;
+          latest_notes?: string | null;
+          latest_response_at?: string | null;
+          latest_recorded_by?: string | null;
+          held_for_own_calls?: boolean;
           assignment_status?:
             | "UNASSIGNED"
             | "ASSIGNED"
@@ -192,6 +203,10 @@ export type Database = {
             | "WRONG_NUMBER"
             | "OTHER"
             | null;
+          latest_notes?: string | null;
+          latest_response_at?: string | null;
+          latest_recorded_by?: string | null;
+          held_for_own_calls?: boolean;
           assignment_status?:
             | "UNASSIGNED"
             | "ASSIGNED"

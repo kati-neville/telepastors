@@ -46,8 +46,8 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-muted-foreground">Email</p>
-            <p className="font-medium">{session.email}</p>
+            <p className="text-muted-foreground">Sign-in</p>
+            <p className="font-medium">{session.loginIdentifier}</p>
           </div>
           <div>
             <p className="text-muted-foreground">Ministry role</p>

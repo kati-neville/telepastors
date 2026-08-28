@@ -1,6 +1,7 @@
 import "dotenv/config";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "../src/lib/supabase/admin";
+import { getTelepastorPhoneNormalized } from "../src/lib/telepastors/phone";
 import type { Database } from "../src/types/database";
 
 async function main() {
@@ -18,6 +19,7 @@ async function main() {
   }
 
   const supabase: SupabaseClient<Database, "public"> = createServiceRoleClient();
+  const phoneNormalized = getTelepastorPhoneNormalized(phone);
 
   const { data: existingAdmins, error: existingError } = await supabase
     .from("telepastors")
@@ -38,8 +40,10 @@ async function main() {
   const { data: authData, error: authError } =
     await supabase.auth.admin.createUser({
       email,
+      phone: phoneNormalized,
       password,
       email_confirm: true,
+      phone_confirm: true,
     });
 
   if (authError || !authData.user) {
@@ -51,6 +55,7 @@ async function main() {
     auth_user_id: authData.user.id,
     name,
     phone,
+    phone_normalized: phoneNormalized,
     address: address || null,
     role: "SUPER_ADMIN",
     is_active: true,

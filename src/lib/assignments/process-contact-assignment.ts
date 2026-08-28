@@ -89,6 +89,7 @@ export async function assignContactToAssignee(
       current_assignee_id: assignee.id,
       current_assignment_id: newAssignment.id,
       latest_response: null,
+      held_for_own_calls: false,
     })
     .eq("id", contact.id);
 

@@ -49,3 +49,10 @@ export const CALL_RESPONSE_SHORT_LABELS: Record<CallResponse, string> = {
   WRONG_NUMBER: "Wrong Number",
   OTHER: "Other",
 };
+
+export const CALL_NOTE_SUGGESTIONS = [
+  "Sick / unwell",
+  "Will confirm later",
+  "Asked for follow-up call",
+  "Traveling / out of town",
+] as const;

@@ -13,6 +13,11 @@ import {
   validateDistributionTotals,
   validateSplitTotals,
 } from "@/lib/assignments/distribute-equally";
+import {
+  isContactReadyForDownstreamDistribution,
+  isRetainedForCallingAssignment,
+  RETAINED_FOR_CALLING_NOTE,
+} from "@/lib/assignments/distribution-pool";
 import { canRetainContactsForCalling } from "@/lib/auth/assignments";
 import type { Telepastor } from "@/types/domain";
 
@@ -29,6 +34,7 @@ function makeTelepastor(
     auth_user_id: null,
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
+    phone_normalized: null,
     address: null,
     profile_picture_url: null,
     date_of_birth: null,
@@ -496,6 +502,50 @@ function testDownstreamReassignmentPermissions() {
   );
 }
 
+function testDistributionPoolExcludesRetainedContacts() {
+  const governorId = "gov-a";
+  const superAdminId = "sa-1";
+
+  assert(
+    isContactReadyForDownstreamDistribution(
+      {
+        current_assignee_id: governorId,
+        assignment_status: "ASSIGNED",
+      },
+      { assigned_by: superAdminId, assignee_id: governorId, notes: null },
+      governorId,
+      "assigned_to_self",
+    ),
+    "Upstream assignment is still ready to distribute",
+  );
+
+  assert(
+    !isContactReadyForDownstreamDistribution(
+      {
+        current_assignee_id: governorId,
+        assignment_status: "ASSIGNED",
+        held_for_own_calls: true,
+      },
+      { assigned_by: superAdminId, assignee_id: governorId, notes: null },
+      governorId,
+      "assigned_to_self",
+    ),
+    "Held-for-own-calls contact is excluded from distribution pool",
+  );
+
+  assert(
+    isRetainedForCallingAssignment(
+      {
+        assigned_by: governorId,
+        assignee_id: governorId,
+        notes: RETAINED_FOR_CALLING_NOTE,
+      },
+      governorId,
+    ),
+    "Retained marker is detected",
+  );
+}
+
 function main() {
   testDistributionPermissions();
   testContactPoolPermissions();
@@ -511,6 +561,7 @@ function main() {
   testReassignmentPreservesHistory();
   testReassignmentResetsLatestResponse();
   testDownstreamReassignmentPermissions();
+  testDistributionPoolExcludesRetainedContacts();
   console.log("Phase 4 assignment tests passed.");
 }
 

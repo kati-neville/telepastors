@@ -61,6 +61,24 @@ export function RoleManagementSection({
     return leaders.filter((leader) => leader.governor_id === governorId);
   }, [governorId, leaders]);
 
+  const governorItems = useMemo(
+    () =>
+      governors.map((governor) => ({
+        label: governor.name,
+        value: governor.id,
+      })),
+    [governors],
+  );
+
+  const leaderItems = useMemo(
+    () =>
+      filteredLeaders.map((leader) => ({
+        label: leader.name,
+        value: leader.id,
+      })),
+    [filteredLeaders],
+  );
+
   if (telepastor.role === "SUPER_ADMIN") {
     return null;
   }
@@ -133,6 +151,7 @@ export function RoleManagementSection({
             <Label>Governor</Label>
             <Select
               value={governorId ?? ""}
+              items={governorItems}
               onValueChange={(value) => setGovernorId(value || null)}
             >
               <SelectTrigger className="w-full">
@@ -154,6 +173,7 @@ export function RoleManagementSection({
             <Label>Leader</Label>
             <Select
               value={leaderId ?? ""}
+              items={leaderItems}
               onValueChange={(value) => setLeaderId(value || null)}
             >
               <SelectTrigger className="w-full">

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { signInWithIdentifier } from "@/lib/auth/sign-in-with-identifier";
 import { clearAuthSession } from "@/lib/auth/sign-out";
 import { createClient } from "@/lib/supabase/server";
 import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
@@ -19,29 +20,14 @@ export async function loginAction(
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
-    password: parsed.data.password,
-  });
+  const result = await signInWithIdentifier(
+    supabase,
+    parsed.data.identifier,
+    parsed.data.password,
+  );
 
-  if (error || !data.user) {
-    return { success: false, error: "invalid_credentials" };
-  }
-
-  const { data: telepastor, error: profileError } = await supabase
-    .from("telepastors")
-    .select("id, is_active")
-    .eq("auth_user_id", data.user.id)
-    .maybeSingle();
-
-  if (profileError || !telepastor) {
-    await supabase.auth.signOut();
-    return { success: false, error: "profile_missing" };
-  }
-
-  if (!telepastor.is_active) {
-    await supabase.auth.signOut();
-    return { success: false, error: "inactive" };
+  if (!result.success) {
+    return { success: false, error: result.error };
   }
 
   return { success: true };

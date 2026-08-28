@@ -102,6 +102,9 @@ export async function recordCallAttemptAction(
     .from("contacts")
     .update({
       latest_response: response,
+      latest_notes: notes?.trim() || null,
+      latest_response_at: new Date().toISOString(),
+      latest_recorded_by: session.telepastor.id,
       assignment_status: nextAssignmentStatus,
     })
     .eq("id", contact.id)

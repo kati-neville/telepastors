@@ -1,4 +1,8 @@
 import {
+  getCallQueueFormDefaults,
+  shouldSuggestCallNotes,
+} from "@/lib/calls/form-defaults";
+import {
   canAccessCallQueue,
   canRecordCallAttempt,
   canViewAssignedContact,
@@ -24,6 +28,7 @@ function makeTelepastor(
     auth_user_id: null,
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
+    phone_normalized: null,
     address: null,
     profile_picture_url: null,
     date_of_birth: null,
@@ -176,12 +181,66 @@ function testQueueProgress() {
   assert(`${completed} / ${assigned}`.includes("18 / 50"), "Progress counter format");
 }
 
+function testCallQueueFormDefaults() {
+  const defaults = getCallQueueFormDefaults({
+    id: "contact-1",
+    campaign_id: "camp-1",
+    name: "Jane Doe",
+    phone: "+233244123456",
+    phone_normalized: "+233244123456",
+    import_id: null,
+    import_row_number: null,
+    import_metadata: null,
+    latest_response: "NOT_COMING",
+    latest_notes: "Sick this week",
+    latest_response_at: "2026-01-01T00:00:00.000Z",
+    latest_recorded_by: "tp-a",
+    held_for_own_calls: false,
+    assignment_status: "IN_PROGRESS",
+    current_assignee_id: "tp-a",
+    current_assignment_id: "assign-1",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    campaign_name: "Easter",
+    attempt_count: 2,
+    prior_attempts: [
+      {
+        id: "attempt-1",
+        contact_id: "contact-1",
+        campaign_id: "camp-1",
+        telepastor_id: "tp-a",
+        assignment_id: "assign-1",
+        response: "UNREACHABLE",
+        notes: "No answer",
+        attempted_at: "2025-12-31T00:00:00.000Z",
+      },
+    ],
+  });
+
+  assert(defaults.response === "NOT_COMING", "Prefills latest response");
+  assert(defaults.notes === "Sick this week", "Prefills denormalized notes");
+
+  assert(
+    shouldSuggestCallNotes("NOT_COMING", ""),
+    "Suggests notes for not coming without notes",
+  );
+  assert(
+    !shouldSuggestCallNotes("NOT_COMING", "Already noted"),
+    "Does not suggest when notes exist",
+  );
+  assert(
+    !shouldSuggestCallNotes("COMING", ""),
+    "Does not suggest for coming",
+  );
+}
+
 function main() {
   testAuthorization();
   testCallLinks();
   testResponseValidation();
   testCallHistoryModel();
   testQueueProgress();
+  testCallQueueFormDefaults();
   console.log("Phase 5 call workflow tests passed.");
 }
 

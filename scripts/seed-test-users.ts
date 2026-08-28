@@ -1,6 +1,7 @@
 import "dotenv/config";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "../src/lib/supabase/admin";
+import { getTelepastorPhoneNormalized } from "../src/lib/telepastors/phone";
 import type { Database } from "../src/types/database";
 
 type MinistryRole = Database["public"]["Tables"]["telepastors"]["Row"]["role"];
@@ -118,12 +119,15 @@ async function upsertSeedUser(
 
 	let authUser = await findAuthUserByEmail(supabase, email);
 	let created = false;
+	const phoneNormalized = getTelepastorPhoneNormalized(spec.phone);
 
 	if (!authUser) {
 		const { data, error } = await supabase.auth.admin.createUser({
 			email,
+			phone: phoneNormalized,
 			password: TEST_PASSWORD,
 			email_confirm: true,
+			phone_confirm: true,
 			user_metadata: {
 				seed_key: spec.key,
 				seed_role: spec.role,
@@ -142,6 +146,8 @@ async function upsertSeedUser(
 		const { error } = await supabase.auth.admin.updateUserById(authUser.id, {
 			password: TEST_PASSWORD,
 			email_confirm: true,
+			phone: phoneNormalized,
+			phone_confirm: true,
 		});
 
 		if (error) {
@@ -170,6 +176,7 @@ async function upsertSeedUser(
 		auth_user_id: authUser.id,
 		name: spec.name,
 		phone: spec.phone,
+		phone_normalized: phoneNormalized,
 		address: spec.address,
 		role: spec.role,
 		is_active: true,
@@ -229,16 +236,21 @@ async function upsertSeedUser(
 
 function printSummary(users: CreatedSeedUser[]) {
 	console.log(
-		"\nTest users ready. Sign in at /login with password: password\n",
+		"\nTest users ready. Sign in at /login with email or phone and password: password\n",
 	);
-	console.log("Role          Email                                 Name");
 	console.log(
-		"------------  ------------------------------------  ------------------",
+		"Role          Email                                 Phone           Name",
+	);
+	console.log(
+		"------------  ------------------------------------  --------------  ------------------",
 	);
 
 	for (const user of users) {
+		const spec = SEED_USERS.find((entry) => entry.key === user.key);
+		const phone = spec?.phone ?? "";
+
 		console.log(
-			`${user.role.padEnd(12)}  ${user.email.padEnd(36)}  ${user.name}`,
+			`${user.role.padEnd(12)}  ${user.email.padEnd(36)}  ${phone.padEnd(14)}  ${user.name}`,
 		);
 	}
 

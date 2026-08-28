@@ -29,6 +29,7 @@ function makeTelepastor(
     auth_user_id: null,
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
+    phone_normalized: null,
     address: null,
     profile_picture_url: null,
     date_of_birth: null,

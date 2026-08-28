@@ -14,6 +14,7 @@ export type Telepastor = {
   auth_user_id: string | null;
   name: string;
   phone: string;
+  phone_normalized: string | null;
   address: string | null;
   profile_picture_url: string | null;
   date_of_birth: string | null;
@@ -45,7 +46,9 @@ export type TelepastorDetail = Telepastor & {
 
 export type AuthSession = {
   userId: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
+  loginIdentifier: string;
   telepastor: Telepastor;
 };
 
@@ -86,6 +89,10 @@ export type Contact = {
   import_row_number: number | null;
   import_metadata: Json | null;
   latest_response: CallResponse | null;
+  latest_notes: string | null;
+  latest_response_at: string | null;
+  latest_recorded_by: string | null;
+  held_for_own_calls: boolean;
   assignment_status: ContactAssignmentStatus;
   current_assignee_id: string | null;
   current_assignment_id: string | null;
@@ -235,14 +242,30 @@ export type RecentCallActivity = {
   contactName: string;
   telepastorName: string;
   response: CallResponse;
+  notes: string | null;
   attemptedAt: string;
   campaignName: string;
+};
+
+export type FollowUpContact = {
+  id: string;
+  name: string;
+  phone: string;
+  phoneNormalized: string;
+  currentAssigneeId: string | null;
+  campaignName: string;
+  latestResponse: CallResponse | null;
+  latestNotes: string;
+  latestResponseAt: string | null;
+  assigneeName: string;
+  recordedByName: string;
 };
 
 export type LeadershipDashboardData = {
   scopeLabel: string;
   stats: CampaignStatistics;
   activeCampaigns: number;
+  contactsWithNotesCount: number;
   teamPerformance: TeamMemberStatistics[];
   teamPerformanceView: "governor" | "leader" | "telepastor";
   recentActivity: RecentCallActivity[];
@@ -258,6 +281,7 @@ export type ReportFilterOptions = {
 
 export type TelepastorDashboardData = {
   stats: CallQueueStats;
+  contactsWithNotesCount: number;
   recentActivity: RecentCallActivity[];
 };
 

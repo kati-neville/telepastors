@@ -2,16 +2,19 @@ import Link from "next/link";
 import { List, PhoneCall } from "lucide-react";
 import { CallStatsGrid } from "@/components/calls/call-stats-grid";
 import { RecentActivityPanel } from "@/components/stats/recent-activity-panel";
+import { ContactsWithNotesCard } from "@/components/stats/contacts-with-notes-card";
 import { Button } from "@/components/ui/button";
 import type { CallQueueStats, RecentCallActivity } from "@/types/domain";
 
 export function TelepastorDashboard({
   stats,
   telepastorName,
+  contactsWithNotesCount = 0,
   recentActivity = [],
 }: {
   stats: CallQueueStats;
   telepastorName: string;
+  contactsWithNotesCount?: number;
   recentActivity?: RecentCallActivity[];
 }) {
   const ctaLabel = stats.remaining > 0 ? "Continue Calling" : "Start Calling";
@@ -29,6 +32,11 @@ export function TelepastorDashboard({
       </div>
 
       <CallStatsGrid stats={stats} />
+
+      <ContactsWithNotesCard
+        count={contactsWithNotesCount}
+        href="/contacts-with-notes"
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Button

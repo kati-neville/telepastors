@@ -17,6 +17,7 @@ import {
   canViewUser,
 } from "@/lib/auth/permissions";
 import { requireAuthSession } from "@/lib/auth/session";
+import { getTelepastorPhoneNormalized } from "@/lib/telepastors/phone";
 import { toActionErrorMessage } from "@/lib/errors/client-message";
 import { fetchTelepastorById } from "@/lib/queries/telepastors";
 import { createClient } from "@/lib/supabase/server";
@@ -77,11 +78,24 @@ export async function createTelepastorAction(
   });
 
   const supabase = await createClient();
+  let phoneNormalized: string;
+
+  try {
+    phoneNormalized = getTelepastorPhoneNormalized(parsed.data.phone);
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Enter a valid phone number.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("telepastors")
     .insert({
       name: parsed.data.name,
       phone: parsed.data.phone,
+      phone_normalized: phoneNormalized,
       address: parsed.data.address,
       role: parsed.data.role,
       leader_id: hierarchy.leader_id,
@@ -138,11 +152,24 @@ export async function updateTelepastorProfileAction(
   }
 
   const supabase = await createClient();
+  let phoneNormalized: string;
+
+  try {
+    phoneNormalized = getTelepastorPhoneNormalized(parsed.data.phone);
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Enter a valid phone number.",
+    };
+  }
+
   const { error } = await supabase
     .from("telepastors")
     .update({
       name: parsed.data.name,
       phone: parsed.data.phone,
+      phone_normalized: phoneNormalized,
       address: parsed.data.address || null,
       date_of_birth: parsed.data.date_of_birth || null,
       occupation: parsed.data.occupation || null,

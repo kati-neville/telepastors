@@ -44,7 +44,7 @@ export async function requireAuthSession(): Promise<AuthSession> {
     error,
   } = await supabase.auth.getUser();
 
-  if (error || !user || !user.email) {
+  if (error || !user || (!user.email && !user.phone)) {
     redirect("/login");
   }
 
@@ -62,9 +62,14 @@ export async function requireAuthSession(): Promise<AuthSession> {
     redirect("/login?error=inactive");
   }
 
+  const email = user.email ?? null;
+  const phone = user.phone ?? null;
+
   return {
     userId: user.id,
-    email: user.email,
+    email,
+    phone,
+    loginIdentifier: email ?? phone ?? telepastor.phone,
     telepastor,
   };
 }

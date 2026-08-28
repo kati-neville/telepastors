@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Phone, Search } from "lucide-react";
+import { MessageSquareText, Phone, Search } from "lucide-react";
 import { CallResponseBadge } from "@/components/calls/call-response-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { buildTelLink } from "@/lib/config/calling";
+import { truncateText } from "@/lib/utils/text";
 import type { AssignedContact } from "@/types/domain";
 
 type AssignedContactsListProps = {
@@ -72,6 +73,7 @@ export function AssignedContactsList({
                   <TableHead>Phone</TableHead>
                   <TableHead>Campaign</TableHead>
                   <TableHead>Response</TableHead>
+                  <TableHead>Notes</TableHead>
                   <TableHead>Attempts</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -87,6 +89,16 @@ export function AssignedContactsList({
                         <CallResponseBadge response={contact.latest_response} />
                       ) : (
                         "Pending"
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-xs text-muted-foreground">
+                      {contact.latest_notes?.trim() ? (
+                        <span className="inline-flex items-start gap-1.5">
+                          <MessageSquareText className="mt-0.5 size-4 shrink-0 text-primary" />
+                          <span>{truncateText(contact.latest_notes, 80)}</span>
+                        </span>
+                      ) : (
+                        "—"
                       )}
                     </TableCell>
                     <TableCell>{contact.attempt_count}</TableCell>
@@ -131,10 +143,18 @@ function ContactCard({ contact }: { contact: AssignedContact }) {
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {contact.attempt_count} attempt
-          {contact.attempt_count === 1 ? "" : "s"}
-        </p>
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            {contact.attempt_count} attempt
+            {contact.attempt_count === 1 ? "" : "s"}
+          </p>
+          {contact.latest_notes?.trim() ? (
+            <p className="inline-flex items-start gap-1 text-xs text-muted-foreground">
+              <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-primary" />
+              <span>{truncateText(contact.latest_notes, 60)}</span>
+            </p>
+          ) : null}
+        </div>
         <Link
           href={`/my-calls/queue?contactId=${contact.id}`}
           className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"

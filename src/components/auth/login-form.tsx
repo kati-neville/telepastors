@@ -22,7 +22,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   profile_missing:
     "Your account is not linked to a ministry profile. Contact a Super Admin.",
   inactive: "Your ministry account is inactive. Contact a Super Admin.",
-  invalid_credentials: "Invalid email or password.",
+  invalid_credentials: "Invalid email, phone number, or password.",
 };
 
 export function LoginForm() {
@@ -37,7 +37,7 @@ export function LoginForm() {
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      identifier: "",
       password: "",
     },
   });
@@ -81,17 +81,17 @@ export function LoginForm() {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="identifier">Email or phone</Label>
             <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              {...form.register("email")}
+              id="identifier"
+              type="text"
+              autoComplete="username"
+              placeholder="you@example.com or 0241234567"
+              {...form.register("identifier")}
             />
-            {form.formState.errors.email ? (
+            {form.formState.errors.identifier ? (
               <p className="text-sm text-destructive">
-                {form.formState.errors.email.message}
+                {form.formState.errors.identifier.message}
               </p>
             ) : null}
           </div>

@@ -1,9 +1,25 @@
 import { z } from "zod";
+import { parseLoginIdentifier } from "@/lib/auth/login-identifier";
 
-export const loginSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
+export const loginSchema = z
+  .object({
+    identifier: z
+      .string()
+      .trim()
+      .min(1, "Enter your email or phone number"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+  })
+  .superRefine((data, ctx) => {
+    const parsed = parseLoginIdentifier(data.identifier);
+
+    if (parsed.type === "invalid") {
+      ctx.addIssue({
+        code: "custom",
+        message: parsed.message,
+        path: ["identifier"],
+      });
+    }
+  });
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
 

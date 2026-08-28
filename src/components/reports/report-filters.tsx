@@ -2,8 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -174,31 +175,42 @@ export function ReportFilters({ filters, options, role }: ReportFiltersProps) {
         </FilterField>
 
         <FilterField label="From">
-          <Input
-            type="date"
+          <DatePicker
             value={filters.from?.slice(0, 10) ?? ""}
-            onChange={(event) =>
+            onChange={(value) =>
               updateFilters({
-                from: event.target.value
-                  ? `${event.target.value}T00:00:00.000Z`
-                  : undefined,
+                from: value ? `${value}T00:00:00.000Z` : undefined,
               })
             }
+            placeholder="Select start date"
           />
         </FilterField>
 
         <FilterField label="To">
-          <Input
-            type="date"
+          <DatePicker
             value={filters.to?.slice(0, 10) ?? ""}
-            onChange={(event) =>
+            onChange={(value) =>
               updateFilters({
-                to: event.target.value
-                  ? `${event.target.value}T23:59:59.999Z`
-                  : undefined,
+                to: value ? `${value}T23:59:59.999Z` : undefined,
               })
             }
+            placeholder="Select end date"
           />
+        </FilterField>
+
+        <FilterField label="Has notes">
+          <div className="flex min-h-9 items-center gap-3 rounded-md border px-3">
+            <Switch
+              id="has-notes-filter"
+              checked={filters.hasNotes === "true"}
+              onCheckedChange={(checked) =>
+                updateFilters({ hasNotes: checked ? "true" : undefined })
+              }
+            />
+            <Label htmlFor="has-notes-filter" className="font-normal">
+              Only show activity with notes
+            </Label>
+          </div>
         </FilterField>
       </div>
     </div>

@@ -3,6 +3,7 @@ import {
   canAssignContactToAssignee,
   canDistributeContacts,
 } from "@/lib/auth/assignments";
+import { parseLoginIdentifier } from "@/lib/auth/login-identifier";
 import { canSendSmsBroadcasts, canManageWhatsAppTemplates } from "@/lib/auth/broadcasts";
 import { canAccessCallQueue, canRecordCallAttempt } from "@/lib/auth/calls";
 import { canChangeRole, canViewUser } from "@/lib/auth/permissions";
@@ -29,6 +30,7 @@ function makeTelepastor(
     auth_user_id: null,
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
+    phone_normalized: null,
     address: null,
     profile_picture_url: null,
     date_of_birth: null,
@@ -246,6 +248,17 @@ function testProfileCompleteness() {
   assert(isProfileComplete(complete), "Complete profile passes");
 }
 
+function testLoginIdentifierParsing() {
+  const email = parseLoginIdentifier("admin@example.com");
+  assert(email.type === "email" && email.email === "admin@example.com", "Email parsed");
+
+  const phone = parseLoginIdentifier("0244123456");
+  assert(phone.type === "phone" && phone.phone === "+233244123456", "Local phone parsed");
+
+  const invalid = parseLoginIdentifier("not-an-identifier");
+  assert(invalid.type === "invalid", "Invalid identifier rejected");
+}
+
 function main() {
   testAuditActionCatalog();
   testErrorSanitization();
@@ -257,6 +270,7 @@ function main() {
   testBroadcastRecipientValidation();
   testTemplatePermissions();
   testProfileCompleteness();
+  testLoginIdentifierParsing();
   console.log("Phase 8 hardening tests passed.");
 }
 

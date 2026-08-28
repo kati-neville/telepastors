@@ -17,7 +17,7 @@ export default async function DashboardLayout({
       <AppSidebar
         items={navItems}
         telepastor={session.telepastor}
-        email={session.email}
+        email={session.loginIdentifier}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader session={session} navItems={navItems} />

@@ -47,6 +47,9 @@ Run all SQL files in `supabase/migrations/` **in order** against your Supabase p
 7. `20240827000007_audit_logs.sql`
 8. `20240827000008_fix_assignment_reassignment_rls.sql`
 9. `20240827000009_governor_leader_calling.sql`
+10. `20240827000010_contact_latest_notes.sql`
+11. `20240827000011_contact_held_for_own_calls.sql`
+12. `20240827000012_audit_logs_select_own.sql`
 
 ### 4. Bootstrap the first Super Admin
 

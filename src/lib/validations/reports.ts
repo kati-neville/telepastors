@@ -18,6 +18,7 @@ export const reportFilterSchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   view: z.enum(TEAM_PERFORMANCE_VIEWS).optional(),
+  hasNotes: z.literal("true").optional(),
 });
 
 export type ReportFilterValues = z.infer<typeof reportFilterSchema>;

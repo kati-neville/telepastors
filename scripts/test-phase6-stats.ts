@@ -7,6 +7,7 @@ import {
   resolveTeamPerformanceView,
 } from "@/lib/reports/team-performance-view";
 import { computeContactStatistics } from "@/lib/stats/compute";
+import { truncateText } from "@/lib/utils/text";
 import type { Telepastor } from "@/types/domain";
 
 function assert(condition: boolean, message: string) {
@@ -22,6 +23,7 @@ function makeTelepastor(
     auth_user_id: null,
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
+    phone_normalized: null,
     address: null,
     profile_picture_url: null,
     date_of_birth: null,
@@ -224,12 +226,21 @@ function testTeamPerformanceViews() {
   assert(drillDown?.leaderId === "lead-a", "Governor leader drill-down sets leaderId");
 }
 
+function testTruncateText() {
+  assert(truncateText("Short note") === "Short note", "Short text unchanged");
+  assert(
+    truncateText("abcdefghijklmnopqrstuvwxyz", 10) === "abcdefghi…",
+    "Long text truncated",
+  );
+}
+
 function main() {
   testUniqueContactStatistics();
   testRepeatedAttemptsDoNotInflateContacts();
   testReachAndComingRates();
   testReportScoping();
   testTeamPerformanceViews();
+  testTruncateText();
   console.log("Phase 6 statistics tests passed.");
 }
 

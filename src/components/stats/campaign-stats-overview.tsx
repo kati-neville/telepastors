@@ -1,9 +1,24 @@
+import { ContactsWithNotesCard } from "@/components/stats/contacts-with-notes-card";
 import { StatCard } from "@/components/stats/stat-card";
 import type { CampaignStatistics } from "@/types/domain";
 
-export function CampaignStatsOverview({ stats }: { stats: CampaignStatistics }) {
+export function CampaignStatsOverview({
+  stats,
+  contactsWithNotesCount,
+  contactsWithNotesHref,
+}: {
+  stats: CampaignStatistics;
+  contactsWithNotesCount?: number;
+  contactsWithNotesHref?: string;
+}) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
+      {contactsWithNotesCount !== undefined && contactsWithNotesHref ? (
+        <ContactsWithNotesCard
+          count={contactsWithNotesCount}
+          href={contactsWithNotesHref}
+        />
+      ) : null}
       <StatCard label="Total contacts" value={stats.totalContacts} />
       <StatCard label="Assigned" value={stats.assigned} />
       <StatCard label="Unassigned" value={stats.unassigned} />

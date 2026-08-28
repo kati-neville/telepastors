@@ -15,7 +15,7 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 			<MobileNav
 				items={navItems}
 				telepastor={session.telepastor}
-				email={session.email}
+				email={session.loginIdentifier}
 			/>
 			<div className="min-w-0 flex-1">
 				{title ? (
@@ -28,7 +28,7 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 					</p>
 				)}
 			</div>
-			<UserMenu telepastor={session.telepastor} email={session.email} />
+			<UserMenu telepastor={session.telepastor} email={session.loginIdentifier} />
 		</header>
 	);
 }

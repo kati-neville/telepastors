@@ -11,6 +11,7 @@ import {
   updateCampaignAction,
 } from "@/app/actions/campaigns";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -101,7 +102,14 @@ export function CampaignForm({ campaign }: CampaignFormProps) {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="event_date">Event / follow-up date</Label>
-          <Input id="event_date" type="date" {...form.register("event_date")} />
+          <DatePicker
+            id="event_date"
+            value={form.watch("event_date") ?? ""}
+            onChange={(value) =>
+              form.setValue("event_date", value, { shouldDirty: true })
+            }
+            placeholder="Select event date"
+          />
         </div>
 
         <div className="space-y-2">

@@ -26,9 +26,14 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  getCallQueueFormDefaults,
+  shouldSuggestCallNotes,
+} from "@/lib/calls/form-defaults";
+import {
   buildTelLink,
   buildWhatsAppLink,
   buildWhatsAppMessage,
+  CALL_NOTE_SUGGESTIONS,
   CALL_RESPONSE_SHORT_LABELS,
 } from "@/lib/config/calling";
 import type {
@@ -65,14 +70,16 @@ export function CallQueuePanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [stats, setStats] = useState(initialStats);
+  const initialForm = getCallQueueFormDefaults(initialContact);
   const [selectedTemplateId, setSelectedTemplateId] = useState(
     defaultTemplateId ?? whatsAppTemplates[0]?.id ?? "",
   );
   const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const [selectedResponse, setSelectedResponse] = useState<CallResponse | null>(
-    null,
+    initialForm.response,
   );
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(initialForm.notes);
+  const [showNotesPrompt, setShowNotesPrompt] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastSavedContactName, setLastSavedContactName] = useState("");
 
@@ -113,7 +120,7 @@ export function CallQueuePanel({
     }
   };
 
-  const handleSaveAndNext = () => {
+  const handleSaveAndNext = (skipNotesPrompt = false) => {
     if (!currentContact) return;
 
     if (!selectedResponse) {
@@ -125,6 +132,16 @@ export function CallQueuePanel({
       toast.error("Please add notes when selecting Other.");
       return;
     }
+
+    if (
+      !skipNotesPrompt &&
+      shouldSuggestCallNotes(selectedResponse, notes)
+    ) {
+      setShowNotesPrompt(true);
+      return;
+    }
+
+    setShowNotesPrompt(false);
 
     startTransition(async () => {
       const result = await recordCallAttemptAction({
@@ -250,6 +267,12 @@ export function CallQueuePanel({
               </div>
             ) : null}
 
+            {currentContact.latest_notes?.trim() ? (
+              <p className="mt-3 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                {currentContact.latest_notes}
+              </p>
+            ) : null}
+
             {currentContact.attempt_count > 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">
                 {currentContact.attempt_count} previous attempt
@@ -337,11 +360,63 @@ export function CallQueuePanel({
             <Textarea
               id="call-notes"
               value={notes}
-              onChange={(event) => setNotes(event.target.value)}
+              onChange={(event) => {
+                setNotes(event.target.value);
+                if (showNotesPrompt) {
+                  setShowNotesPrompt(false);
+                }
+              }}
               placeholder="Optional details (required for Other)"
               rows={3}
               disabled={isPending}
             />
+            <div className="flex flex-wrap gap-2">
+              {CALL_NOTE_SUGGESTIONS.map((suggestion) => (
+                <Button
+                  key={suggestion}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => {
+                    setNotes((current) =>
+                      current.trim()
+                        ? `${current.trim()}\n${suggestion}`
+                        : suggestion,
+                    );
+                    setShowNotesPrompt(false);
+                  }}
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
+            {showNotesPrompt ? (
+              <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                <p>
+                  Adding a note helps pastors follow up on this contact.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isPending}
+                    onClick={() => setShowNotesPrompt(false)}
+                  >
+                    Add note
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => handleSaveAndNext(true)}
+                  >
+                    Save without note
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </motion.div>
       </AnimatePresence>
@@ -375,7 +450,7 @@ export function CallQueuePanel({
             type="button"
             className="min-h-12 flex-[2] text-base"
             disabled={isPending || !selectedResponse}
-            onClick={handleSaveAndNext}
+            onClick={() => handleSaveAndNext()}
           >
             {isPending ? (
               <>

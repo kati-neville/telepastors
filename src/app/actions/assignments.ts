@@ -14,6 +14,7 @@ import {
   splitPoolForRetention,
   validateDistributionTotals,
 } from "@/lib/assignments/distribute-equally";
+import { markContactsHeldForOwnCalls } from "@/lib/assignments/retain-for-calling";
 import { AUDIT_ACTIONS } from "@/lib/audit/types";
 import { recordAuditEvent } from "@/lib/audit/log";
 import { requireAuthSession } from "@/lib/auth/session";
@@ -225,10 +226,8 @@ export async function bulkAssignContactsAction(
     };
   }
 
-  const { distributable: distributableContactIds } = splitPoolForRetention(
-    poolContactIds,
-    retainCount,
-  );
+  const { retained, distributable: distributableContactIds } =
+    splitPoolForRetention(poolContactIds, retainCount);
 
   const assigneeIds = assignments.map((assignment) => assignment.assigneeId);
   const assigneeRecords = await Promise.all(
@@ -345,6 +344,24 @@ export async function bulkAssignContactsAction(
     });
   }
 
+  if (retained.length > 0) {
+    const retainResult = await markContactsHeldForOwnCalls(supabase, {
+      contactIds: retained,
+      actorId: session.telepastor.id,
+      campaignId,
+    });
+
+    if (!retainResult.success) {
+      return {
+        success: false,
+        error:
+          assignedCount > 0
+            ? `${retainResult.error} ${assignedCount} contacts were assigned before the error.`
+            : retainResult.error,
+      };
+    }
+  }
+
   revalidateAssignmentPaths(campaignId);
 
   await recordAuditEvent({
@@ -356,6 +373,7 @@ export async function bulkAssignContactsAction(
       assignedCount,
       reassignedCount,
       retainCount,
+      poolTotal: poolContactIds.length,
       byAssignee,
     },
   });

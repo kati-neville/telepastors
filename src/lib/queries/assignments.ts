@@ -9,6 +9,7 @@ import type {
 import type { DistributionFilterValues } from "@/lib/validations/assignments";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import { getDistributionPoolFilter } from "@/lib/auth/assignments";
+import { fetchDistributionPoolContactsForCampaign } from "@/lib/assignments/fetch-distribution-pool";
 import { buildContactSearchFilter } from "@/lib/utils/search";
 
 export async function fetchDistributionStats(
@@ -28,6 +29,10 @@ export async function fetchDistributionStats(
 
   const contacts = data ?? [];
   const pool = getDistributionPoolFilter(context);
+  const poolContacts = await fetchDistributionPoolContactsForCampaign(
+    campaignId,
+    context,
+  );
 
   return {
     total: contacts.length,
@@ -36,9 +41,7 @@ export async function fetchDistributionStats(
       .length,
     assignedToMe:
       pool === "assigned_to_self"
-        ? contacts.filter(
-            (c) => c.current_assignee_id === context.telepastor.id,
-          ).length
+        ? poolContacts.length
         : contacts.filter((c) => c.assignment_status === "UNASSIGNED").length,
   };
 }
@@ -49,14 +52,13 @@ export async function fetchDistributionContacts(
   filters: DistributionFilterValues,
 ): Promise<ContactWithAssignee[]> {
   const supabase = await createClient();
+  const pool = getDistributionPoolFilter(context);
 
   let query = supabase
     .from("contacts")
     .select("*")
     .eq("campaign_id", campaignId)
     .order("name", { ascending: true });
-
-  const pool = getDistributionPoolFilter(context);
 
   if (pool === "unassigned") {
     if (filters.pool === "unassigned" || filters.pool === "all") {
@@ -66,8 +68,6 @@ export async function fetchDistributionContacts(
     } else if (filters.pool === "assigned") {
       query = query.neq("assignment_status", "UNASSIGNED");
     }
-  } else {
-    query = query.eq("current_assignee_id", context.telepastor.id);
   }
 
   const search = filters.q?.trim();
@@ -84,7 +84,17 @@ export async function fetchDistributionContacts(
     throw new Error(error.message);
   }
 
-  const contacts = data ?? [];
+  let contacts = data ?? [];
+
+  if (pool === "assigned_to_self") {
+    const poolContacts = await fetchDistributionPoolContactsForCampaign(
+      campaignId,
+      context,
+    );
+    const poolIds = new Set(poolContacts.map((contact) => contact.id));
+    contacts = contacts.filter((contact) => poolIds.has(contact.id));
+  }
+
   const assigneeIds = [
     ...new Set(
       contacts
@@ -192,29 +202,12 @@ export async function fetchDistributionPoolContactIds(
   campaignId: string,
   context: AuthorizationContext,
 ): Promise<string[]> {
-  const supabase = await createClient();
+  const contacts = await fetchDistributionPoolContactsForCampaign(
+    campaignId,
+    context,
+  );
 
-  let query = supabase
-    .from("contacts")
-    .select("id")
-    .eq("campaign_id", campaignId)
-    .order("name", { ascending: true });
-
-  const pool = getDistributionPoolFilter(context);
-
-  if (pool === "unassigned") {
-    query = query.eq("assignment_status", "UNASSIGNED");
-  } else {
-    query = query.eq("current_assignee_id", context.telepastor.id);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? []).map((contact) => contact.id);
+  return contacts.map((contact) => contact.id);
 }
 
 export async function fetchContactsByIds(contactIds: string[]) {
@@ -301,32 +294,17 @@ export async function fetchDistributionSummary(
     return { totalReady: 0, campaigns: [] };
   }
 
-  const supabase = await createClient();
-  const pool = getDistributionPoolFilter(context);
-
   const summaries = await Promise.all(
     campaigns.map(async (campaign) => {
-      let query = supabase
-        .from("contacts")
-        .select("id", { count: "exact", head: true })
-        .eq("campaign_id", campaign.id);
-
-      if (pool === "unassigned") {
-        query = query.eq("assignment_status", "UNASSIGNED");
-      } else {
-        query = query.eq("current_assignee_id", context.telepastor.id);
-      }
-
-      const { count, error } = await query;
-
-      if (error) {
-        throw new Error(error.message);
-      }
+      const poolContacts = await fetchDistributionPoolContactsForCampaign(
+        campaign.id,
+        context,
+      );
 
       return {
         id: campaign.id,
         name: campaign.name,
-        readyCount: count ?? 0,
+        readyCount: poolContacts.length,
       };
     }),
   );

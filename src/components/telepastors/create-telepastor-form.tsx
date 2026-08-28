@@ -60,6 +60,24 @@ export function CreateTelepastorForm({
     return leaders.filter((leader) => leader.governor_id === selectedGovernorId);
   }, [leaders, selectedGovernorId]);
 
+  const governorItems = useMemo(
+    () =>
+      governors.map((governor) => ({
+        label: governor.name,
+        value: governor.id,
+      })),
+    [governors],
+  );
+
+  const leaderItems = useMemo(
+    () =>
+      filteredLeaders.map((leader) => ({
+        label: leader.name,
+        value: leader.id,
+      })),
+    [filteredLeaders],
+  );
+
   const onSubmit = form.handleSubmit((values) => {
     setServerError(null);
     startTransition(async () => {
@@ -140,6 +158,7 @@ export function CreateTelepastorForm({
             <Label>Governor</Label>
             <Select
               value={form.watch("governor_id") ?? ""}
+              items={governorItems}
               onValueChange={(value) =>
                 form.setValue("governor_id", value || null)
               }
@@ -168,6 +187,7 @@ export function CreateTelepastorForm({
             <Label>Leader</Label>
             <Select
               value={form.watch("leader_id") ?? ""}
+              items={leaderItems}
               onValueChange={(value) =>
                 form.setValue("leader_id", value || null)
               }

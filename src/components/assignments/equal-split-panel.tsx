@@ -94,6 +94,7 @@ export function EqualSplitPanel({
 		sortedAssignees.length > 0 &&
 		totalsMatch &&
 		!isPending;
+	const retainOnly = canRetain && distributableCount === 0 && retainCount > 0;
 
 	const updateSplitForRetain = (nextRetainCount: number) => {
 		setRetainCount(nextRetainCount);
@@ -302,6 +303,11 @@ export function EqualSplitPanel({
 												<Loader2 className="animate-spin" />
 												Distributing...
 											</>
+										) : retainOnly ? (
+											<>
+												<Share2 />
+												Confirm keep for my calls
+											</>
 										) : (
 											<>
 												<Share2 />
@@ -313,18 +319,25 @@ export function EqualSplitPanel({
 							/>
 							<AlertDialogContent>
 								<AlertDialogHeader>
-									<AlertDialogTitle>Confirm distribution</AlertDialogTitle>
+									<AlertDialogTitle>
+										{retainOnly
+											? "Confirm keep for my calls"
+											: "Confirm distribution"}
+									</AlertDialogTitle>
 									<AlertDialogDescription>
-										{canRetain && retainCount > 0
+										{retainOnly
+											? `Keep all ${retainCount} contact${retainCount === 1 ? "" : "s"} assigned to you for your own calls? They will be removed from the distribution queue.`
+											: canRetain && retainCount > 0
 											? `Keep ${retainCount} contacts for your calls and distribute ${assignedTotal} among ${sortedAssignees.length} ${assigneeLabelPlural}? `
 											: `Distribute ${assignedTotal} contacts among ${sortedAssignees.length} ${assigneeLabelPlural}? `}
-										{sortedAssignees
-											.map(
-												assignee =>
-													`${assignee.name}: ${counts[assignee.id] ?? 0}`,
-											)
-											.join(" · ")}
-										. Previous assignments will be preserved in history.
+										{retainOnly
+											? ""
+											: `${sortedAssignees
+													.map(
+														assignee =>
+															`${assignee.name}: ${counts[assignee.id] ?? 0}`,
+													)
+													.join(" · ")}. Previous assignments will be preserved in history.`}
 									</AlertDialogDescription>
 								</AlertDialogHeader>
 								<AlertDialogFooter>
@@ -334,7 +347,7 @@ export function EqualSplitPanel({
 									<AlertDialogAction
 										onClick={handleDistribute}
 										disabled={isPending}>
-										Confirm distribution
+										{retainOnly ? "Confirm keep" : "Confirm distribution"}
 									</AlertDialogAction>
 								</AlertDialogFooter>
 							</AlertDialogContent>

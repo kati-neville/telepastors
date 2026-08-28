@@ -8,6 +8,7 @@ import { TeamPerformanceSection } from "@/components/reports/team-performance-se
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stats/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buildContactsWithNotesHref } from "@/lib/reports/contacts-with-notes-url";
 import type { LeadershipDashboardData, MinistryRole } from "@/types/domain";
 import type { ReportFilterValues } from "@/lib/validations/reports";
 
@@ -26,6 +27,7 @@ export function LeadershipDashboard({
   showFullReportsLink?: boolean;
   showHeader?: boolean;
 }) {
+  const contactsWithNotesHref = buildContactsWithNotesHref(filters);
   return (
     <div className="space-y-6">
       {showHeader ? (
@@ -68,7 +70,11 @@ export function LeadershipDashboard({
         />
       </div>
 
-      <CampaignStatsOverview stats={data.stats} />
+      <CampaignStatsOverview
+        stats={data.stats}
+        contactsWithNotesCount={data.contactsWithNotesCount}
+        contactsWithNotesHref={contactsWithNotesHref}
+      />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ResponseBreakdown stats={data.stats} />
