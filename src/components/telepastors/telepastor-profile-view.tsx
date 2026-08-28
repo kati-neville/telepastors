@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { ActiveStatusSection } from "@/components/telepastors/active-status-section";
+import { ResetPasswordSection } from "@/components/telepastors/reset-password-section";
 import { TelepastorAvatar } from "@/components/telepastors/telepastor-avatar";
 import {
   ActiveStatusBadge,
@@ -133,6 +134,10 @@ export function TelepastorProfileView({
 
       {canToggle && telepastor.role !== "SUPER_ADMIN" ? (
         <ActiveStatusSection telepastor={telepastor} />
+      ) : null}
+
+      {canManage && telepastor.role !== "SUPER_ADMIN" ? (
+        <ResetPasswordSection telepastor={telepastor} />
       ) : null}
 
       {canChangeRole(context) ? (

@@ -21,6 +21,7 @@ import {
   deleteAuthUser,
   provisionTelepastorAuthUser,
 } from "@/lib/auth/provision-auth-user";
+import { resetTelepastorPassword } from "@/lib/auth/reset-telepastor-password";
 import { requireAuthSession } from "@/lib/auth/session";
 import { getTelepastorPhoneNormalized } from "@/lib/telepastors/phone";
 import { toActionErrorMessage } from "@/lib/errors/client-message";
@@ -392,6 +393,59 @@ export async function toggleTelepastorActiveAction(
 
   revalidateTelepastorPaths(id);
   return { success: true, id };
+}
+
+export async function resetTelepastorPasswordAction(
+  id: string,
+): Promise<ActionResult> {
+  const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
+  const existing = await fetchTelepastorById(id);
+
+  if (!existing) {
+    return { success: false, error: "Telepastor not found." };
+  }
+
+  if (!canManageTelepastor(context, existing)) {
+    return {
+      success: false,
+      error: "You are not allowed to reset this member's password.",
+    };
+  }
+
+  if (existing.role === "SUPER_ADMIN") {
+    return {
+      success: false,
+      error: "Super Admin passwords cannot be reset from the directory.",
+    };
+  }
+
+  try {
+    const result = await resetTelepastorPassword(id);
+
+    await recordAuditEvent({
+      actorId: session.telepastor.id,
+      action: AUDIT_ACTIONS.TELEPASTOR_PASSWORD_RESET,
+      entityType: "telepastor",
+      entityId: id,
+      metadata: { name: existing.name },
+    });
+
+    revalidateTelepastorPaths(id);
+
+    return {
+      success: true,
+      id: result.telepastorId,
+      name: result.name,
+      phone: result.phone,
+      temporaryPassword: result.temporaryPassword,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionErrorMessage(error, "Unable to reset password."),
+    };
+  }
 }
 
 export async function uploadProfilePhotoAction(
