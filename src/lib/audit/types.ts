@@ -1,5 +1,6 @@
 export const AUDIT_ACTIONS = {
   TELEPASTOR_CREATED: "telepastor.created",
+  TELEPASTORS_IMPORTED: "telepastors.imported",
   TELEPASTOR_PROFILE_UPDATED: "telepastor.profile_updated",
   TELEPASTOR_ROLE_CHANGED: "telepastor.role_changed",
   TELEPASTOR_ACTIVATED: "telepastor.activated",

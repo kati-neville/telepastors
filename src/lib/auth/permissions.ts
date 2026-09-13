@@ -36,7 +36,17 @@ export function canManageTelepastor(
 }
 
 export function canCreateTelepastor(context: AuthorizationContext): boolean {
-  return context.telepastor.role === "SUPER_ADMIN";
+  return (
+    context.telepastor.role === "SUPER_ADMIN" ||
+    context.telepastor.role === "GOVERNOR" ||
+    context.telepastor.role === "LEADER"
+  );
+}
+
+export function canBulkImportTelepastors(
+  context: AuthorizationContext,
+): boolean {
+  return canCreateTelepastor(context);
 }
 
 export function canEditTelepastorProfile(

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   resolveHierarchyFields,
+  validateCreatePlacement,
   validateHierarchy,
 } from "@/lib/auth/hierarchy";
 import { AUDIT_ACTIONS } from "@/lib/audit/types";
@@ -90,6 +91,43 @@ export async function createTelepastorAction(
   });
 
   const supabase = await createClient();
+
+  let leaderRecord = null;
+  let governorRecord = null;
+
+  if (hierarchy.leader_id) {
+    const { data } = await supabase
+      .from("telepastors")
+      .select("id, role, governor_id, leader_id")
+      .eq("id", hierarchy.leader_id)
+      .maybeSingle();
+    leaderRecord = data;
+  }
+
+  if (hierarchy.governor_id) {
+    const { data } = await supabase
+      .from("telepastors")
+      .select("id, role, governor_id, leader_id")
+      .eq("id", hierarchy.governor_id)
+      .maybeSingle();
+    governorRecord = data;
+  }
+
+  const placementError = validateCreatePlacement(
+    session.telepastor,
+    {
+      role: parsed.data.role,
+      leader_id: hierarchy.leader_id,
+      governor_id: hierarchy.governor_id,
+    },
+    leaderRecord,
+    governorRecord,
+  );
+
+  if (placementError) {
+    return { success: false, error: placementError };
+  }
+
   let phoneNormalized: string;
 
   try {

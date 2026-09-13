@@ -781,6 +781,68 @@ export type Database = {
           },
         ];
       };
+      telepastor_imports: {
+        Row: {
+          id: string;
+          imported_by: string | null;
+          file_name: string;
+          status: "PREVIEW" | "COMPLETED" | "FAILED" | "CANCELLED";
+          total_rows: number;
+          valid_rows: number;
+          invalid_rows: number;
+          duplicate_rows: number;
+          imported_rows: number;
+          column_mapping: Json | null;
+          preview_data: Json | null;
+          error_summary: Json | null;
+          credentials_export: Json | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          imported_by?: string | null;
+          file_name: string;
+          status?: "PREVIEW" | "COMPLETED" | "FAILED" | "CANCELLED";
+          total_rows?: number;
+          valid_rows?: number;
+          invalid_rows?: number;
+          duplicate_rows?: number;
+          imported_rows?: number;
+          column_mapping?: Json | null;
+          preview_data?: Json | null;
+          error_summary?: Json | null;
+          credentials_export?: Json | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          imported_by?: string | null;
+          file_name?: string;
+          status?: "PREVIEW" | "COMPLETED" | "FAILED" | "CANCELLED";
+          total_rows?: number;
+          valid_rows?: number;
+          invalid_rows?: number;
+          duplicate_rows?: number;
+          imported_rows?: number;
+          column_mapping?: Json | null;
+          preview_data?: Json | null;
+          error_summary?: Json | null;
+          credentials_export?: Json | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "telepastor_imports_imported_by_fkey";
+            columns: ["imported_by"];
+            isOneToOne: false;
+            referencedRelation: "telepastors";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -798,6 +860,10 @@ export type Database = {
       };
       can_manage_campaigns: { Args: Record<string, never>; Returns: boolean };
       can_import_campaign_contacts: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      can_import_telepastors: {
         Args: Record<string, never>;
         Returns: boolean;
       };

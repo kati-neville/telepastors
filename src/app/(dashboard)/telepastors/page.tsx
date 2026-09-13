@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import {
 	TelepastorsEmptyState,
 	TelepastorsFilters,
@@ -10,7 +10,10 @@ import { TelepastorsTable } from "@/components/telepastors/telepastors-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { enforcePageAccess } from "@/lib/auth/guards";
-import { canCreateTelepastor } from "@/lib/auth/permissions";
+import {
+	canBulkImportTelepastors,
+	canCreateTelepastor,
+} from "@/lib/auth/permissions";
 import { requireAuthSession } from "@/lib/auth/session";
 import {
 	fetchGovernorOptions,
@@ -62,6 +65,9 @@ async function TelepastorsDirectory({
 	]);
 
 	const canCreate = canCreateTelepastor({ telepastor: session.telepastor });
+	const canImport = canBulkImportTelepastors({
+		telepastor: session.telepastor,
+	});
 
 	return (
 		<div className="space-y-6">
@@ -75,10 +81,25 @@ async function TelepastorsDirectory({
 					</p>
 				</div>
 
-				<Button render={<Link href="/telepastors/new" />}>
-					<Plus />
-					Add Telepastor
-				</Button>
+				{(canCreate || canImport) && (
+					<div className="flex flex-wrap gap-2">
+						{canImport ? (
+							<Button
+								variant="outline"
+								render={<Link href="/telepastors/import" />}
+							>
+								<Upload />
+								Bulk import
+							</Button>
+						) : null}
+						{canCreate ? (
+							<Button render={<Link href="/telepastors/new" />}>
+								<Plus />
+								Add Telepastor
+							</Button>
+						) : null}
+					</div>
+				)}
 			</div>
 
 			<TelepastorsFilters
@@ -88,7 +109,7 @@ async function TelepastorsDirectory({
 			/>
 
 			{telepastors.length === 0 ? (
-				<TelepastorsEmptyState canCreate={canCreate} />
+				<TelepastorsEmptyState canCreate={canCreate} canImport={canImport} />
 			) : (
 				<>
 					<TelepastorsTable telepastors={telepastors} />

@@ -180,6 +180,39 @@ export type ContactImportSummary = ContactImport & {
   imported_by_name: string | null;
 };
 
+export type TelepastorImportStatus =
+  | "PREVIEW"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
+
+export type TelepastorImportCredential = {
+  id: string;
+  name: string;
+  phone: string;
+  temporaryPassword: string;
+  role: MinistryRole;
+  rowNumber: number;
+};
+
+export type TelepastorImport = {
+  id: string;
+  imported_by: string | null;
+  file_name: string;
+  status: TelepastorImportStatus;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+  duplicate_rows: number;
+  imported_rows: number;
+  column_mapping: Json | null;
+  preview_data: Json | null;
+  error_summary: Json | null;
+  credentials_export: Json | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 export const CALL_RESPONSES = [
   "COMING",
   "NOT_COMING",

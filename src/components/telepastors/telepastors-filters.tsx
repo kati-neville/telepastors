@@ -147,8 +147,10 @@ export function TelepastorsFilters({
 
 export function TelepastorsEmptyState({
   canCreate,
+  canImport = false,
 }: {
   canCreate: boolean;
+  canImport?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center">
@@ -156,14 +158,24 @@ export function TelepastorsEmptyState({
       <p className="mt-2 text-sm text-muted-foreground">
         Try adjusting your search or filters.
       </p>
-      {canCreate ? (
-        <Link
-          href="/telepastors/new"
-          className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
-        >
-          Add the first Telepastor
-        </Link>
-      ) : null}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+        {canCreate ? (
+          <Link
+            href="/telepastors/new"
+            className="inline-flex text-sm font-medium text-primary hover:underline"
+          >
+            Add the first Telepastor
+          </Link>
+        ) : null}
+        {canImport ? (
+          <Link
+            href="/telepastors/import"
+            className="inline-flex text-sm font-medium text-primary hover:underline"
+          >
+            Bulk import from Excel
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -23,16 +23,28 @@ import {
   createTelepastorSchema,
   type CreateTelepastorValues,
 } from "@/lib/validations/telepastors";
-import type { TelepastorSummary } from "@/types/domain";
+import type { MinistryRole, TelepastorSummary } from "@/types/domain";
 
 type CreateTelepastorFormProps = {
   governors: TelepastorSummary[];
   leaders: TelepastorSummary[];
+  assignableRoles: Array<"GOVERNOR" | "LEADER" | "TELEPASTOR">;
+  actorId: string;
+  actorRole: MinistryRole;
+};
+
+const ROLE_LABELS: Record<"GOVERNOR" | "LEADER" | "TELEPASTOR", string> = {
+  GOVERNOR: "Governor",
+  LEADER: "Leader",
+  TELEPASTOR: "Telepastor",
 };
 
 export function CreateTelepastorForm({
   governors,
   leaders,
+  assignableRoles,
+  actorId,
+  actorRole,
 }: CreateTelepastorFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -44,15 +56,19 @@ export function CreateTelepastorForm({
     temporaryPassword: string;
   } | null>(null);
 
+  const defaultRole = assignableRoles.includes("TELEPASTOR")
+    ? "TELEPASTOR"
+    : assignableRoles[0] ?? "TELEPASTOR";
+
   const form = useForm<CreateTelepastorValues>({
     resolver: zodResolver(createTelepastorSchema),
     defaultValues: {
       name: "",
       phone: "",
       address: "",
-      role: "TELEPASTOR",
-      leader_id: null,
-      governor_id: null,
+      role: defaultRole,
+      leader_id: actorRole === "LEADER" ? actorId : null,
+      governor_id: actorRole === "GOVERNOR" ? actorId : null,
     },
   });
 
@@ -170,22 +186,30 @@ export function CreateTelepastorForm({
             onValueChange={(value) => {
               if (!value) return;
               form.setValue("role", value as CreateTelepastorValues["role"]);
-              form.setValue("leader_id", null);
-              form.setValue("governor_id", null);
+              form.setValue(
+                "leader_id",
+                value === "TELEPASTOR" && actorRole === "LEADER" ? actorId : null,
+              );
+              form.setValue(
+                "governor_id",
+                value === "LEADER" && actorRole === "GOVERNOR" ? actorId : null,
+              );
             }}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="TELEPASTOR">Telepastor</SelectItem>
-              <SelectItem value="LEADER">Leader</SelectItem>
-              <SelectItem value="GOVERNOR">Governor</SelectItem>
+              {assignableRoles.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {ROLE_LABELS[role]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
-        {selectedRole === "LEADER" ? (
+        {selectedRole === "LEADER" && actorRole === "SUPER_ADMIN" ? (
           <div className="space-y-2">
             <Label>Governor</Label>
             <Select
@@ -214,7 +238,7 @@ export function CreateTelepastorForm({
           </div>
         ) : null}
 
-        {selectedRole === "TELEPASTOR" ? (
+        {selectedRole === "TELEPASTOR" && actorRole !== "LEADER" ? (
           <div className="space-y-2">
             <Label>Leader</Label>
             <Select
