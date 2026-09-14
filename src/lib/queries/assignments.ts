@@ -157,8 +157,10 @@ export async function fetchAssignableMembers(
 
   if (context.telepastor.role === "SUPER_ADMIN") {
     query = query.eq("role", "GOVERNOR");
-  } else if (context.telepastor.role === "GOVERNOR") {
-    query = query.eq("role", "LEADER").eq("governor_id", context.telepastor.id);
+  } else   if (context.telepastor.role === "GOVERNOR") {
+    query = query
+      .eq("governor_id", context.telepastor.id)
+      .or("role.eq.LEADER,and(role.eq.TELEPASTOR,leader_id.is.null)");
   } else if (context.telepastor.role === "LEADER") {
     query = query.eq("role", "TELEPASTOR").eq("leader_id", context.telepastor.id);
   } else {

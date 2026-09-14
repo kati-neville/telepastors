@@ -31,6 +31,7 @@ type CreateTelepastorFormProps = {
   assignableRoles: Array<"GOVERNOR" | "LEADER" | "TELEPASTOR">;
   actorId: string;
   actorRole: MinistryRole;
+  actorGovernorId: string | null;
 };
 
 const ROLE_LABELS: Record<"GOVERNOR" | "LEADER" | "TELEPASTOR", string> = {
@@ -45,6 +46,7 @@ export function CreateTelepastorForm({
   assignableRoles,
   actorId,
   actorRole,
+  actorGovernorId,
 }: CreateTelepastorFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -68,7 +70,12 @@ export function CreateTelepastorForm({
       address: "",
       role: defaultRole,
       leader_id: actorRole === "LEADER" ? actorId : null,
-      governor_id: actorRole === "GOVERNOR" ? actorId : null,
+      governor_id:
+        actorRole === "GOVERNOR"
+          ? actorId
+          : actorRole === "LEADER"
+            ? actorGovernorId
+            : null,
     },
   });
 
@@ -192,7 +199,13 @@ export function CreateTelepastorForm({
               );
               form.setValue(
                 "governor_id",
-                value === "LEADER" && actorRole === "GOVERNOR" ? actorId : null,
+                value === "LEADER" && actorRole === "GOVERNOR"
+                  ? actorId
+                  : value === "TELEPASTOR" && actorRole === "GOVERNOR"
+                    ? actorId
+                    : value === "TELEPASTOR" && actorRole === "LEADER"
+                      ? actorGovernorId
+                      : null,
               );
             }}
           >
@@ -209,15 +222,19 @@ export function CreateTelepastorForm({
           </Select>
         </div>
 
-        {selectedRole === "LEADER" && actorRole === "SUPER_ADMIN" ? (
+        {(selectedRole === "LEADER" || selectedRole === "TELEPASTOR") &&
+        actorRole === "SUPER_ADMIN" ? (
           <div className="space-y-2">
             <Label>Governor</Label>
             <Select
               value={form.watch("governor_id") ?? ""}
               items={governorItems}
-              onValueChange={(value) =>
-                form.setValue("governor_id", value || null)
-              }
+              onValueChange={(value) => {
+                form.setValue("governor_id", value || null);
+                if (selectedRole === "TELEPASTOR") {
+                  form.setValue("leader_id", null);
+                }
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select governor" />
@@ -240,18 +257,27 @@ export function CreateTelepastorForm({
 
         {selectedRole === "TELEPASTOR" && actorRole !== "LEADER" ? (
           <div className="space-y-2">
-            <Label>Leader</Label>
+            <Label>Leader (optional)</Label>
             <Select
-              value={form.watch("leader_id") ?? ""}
-              items={leaderItems}
+              value={form.watch("leader_id") ?? "__none__"}
+              items={[
+                { label: "No leader (direct to Governor)", value: "__none__" },
+                ...leaderItems,
+              ]}
               onValueChange={(value) =>
-                form.setValue("leader_id", value || null)
+                form.setValue(
+                  "leader_id",
+                  !value || value === "__none__" ? null : value,
+                )
               }
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select leader" />
+                <SelectValue placeholder="Optional leader" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">
+                  No leader (direct to Governor)
+                </SelectItem>
                 {filteredLeaders.map((leader) => (
                   <SelectItem key={leader.id} value={leader.id}>
                     {leader.name}
@@ -259,6 +285,10 @@ export function CreateTelepastorForm({
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              Leave empty to place this Telepastor directly under the Governor.
+              Governors can assign call lists to leaderless Telepastors.
+            </p>
             {form.formState.errors.leader_id ? (
               <p className="text-sm text-destructive">
                 {form.formState.errors.leader_id.message}

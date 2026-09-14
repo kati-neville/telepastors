@@ -118,7 +118,22 @@ function testDistributionPermissions() {
   );
   assert(
     !canAssignContactToAssignee(contextFor(governorA), telepastorA),
-    "Governor A cannot -> Telepastor directly",
+    "Governor A cannot -> led Telepastor (must go via Leader)",
+  );
+
+  const leaderlessTp = makeTelepastor({
+    id: "tp-direct",
+    role: "TELEPASTOR",
+    leader_id: null,
+    governor_id: "gov-a",
+  });
+  assert(
+    canAssignContactToAssignee(contextFor(governorA), leaderlessTp),
+    "Governor A -> leaderless Telepastor in org",
+  );
+  assert(
+    !canAssignContactToAssignee(contextFor(leaderA), leaderlessTp),
+    "Leader A cannot -> leaderless Telepastor",
   );
 
   assert(

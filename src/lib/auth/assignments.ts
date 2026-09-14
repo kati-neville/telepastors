@@ -40,19 +40,23 @@ export function canAssignContactToAssignee(
   context: AuthorizationContext,
   assignee: Pick<Telepastor, "id" | "role" | "governor_id" | "leader_id">,
 ): boolean {
-  const targetRole = getTargetAssigneeRole(context.telepastor.role);
-
-  if (!targetRole || assignee.role !== targetRole) {
-    return false;
-  }
-
   if (context.telepastor.role === "SUPER_ADMIN") {
     return assignee.role === "GOVERNOR";
   }
 
   if (context.telepastor.role === "GOVERNOR") {
+    if (
+      assignee.role === "LEADER" &&
+      assignee.governor_id === context.telepastor.id
+    ) {
+      return true;
+    }
+
+    // Leaderless Telepastors in this governor's org only
     return (
-      assignee.role === "LEADER" && assignee.governor_id === context.telepastor.id
+      assignee.role === "TELEPASTOR" &&
+      assignee.leader_id === null &&
+      assignee.governor_id === context.telepastor.id
     );
   }
 
@@ -119,12 +123,12 @@ export function getDistributionPoolFilter(
 }
 
 export function getAssigneeLabel(role: MinistryRole): string {
-  switch (getTargetAssigneeRole(role)) {
-    case "GOVERNOR":
+  switch (role) {
+    case "SUPER_ADMIN":
       return "Governor";
+    case "GOVERNOR":
+      return "Leader or Telepastor";
     case "LEADER":
-      return "Leader";
-    case "TELEPASTOR":
       return "Telepastor";
     default:
       return "Assignee";

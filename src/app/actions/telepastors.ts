@@ -27,6 +27,7 @@ import { requireAuthSession } from "@/lib/auth/session";
 import { getTelepastorPhoneNormalized } from "@/lib/telepastors/phone";
 import { toActionErrorMessage } from "@/lib/errors/client-message";
 import { fetchTelepastorById } from "@/lib/queries/telepastors";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   createTelepastorSchema,
@@ -74,10 +75,59 @@ export async function createTelepastorAction(
     };
   }
 
+  const supabase = await createClient();
+  // Writes use service role after app-level authz; RLS INSERT has historically
+  // blocked Governors due to ambiguous "role" column checks.
+  const admin = createServiceRoleClient();
+
+  let leaderId = parsed.data.leader_id ?? null;
+  let governorId = parsed.data.governor_id ?? null;
+
+  if (parsed.data.role === "TELEPASTOR") {
+    if (session.telepastor.role === "LEADER") {
+      leaderId = session.telepastor.id;
+      governorId = session.telepastor.governor_id;
+    } else if (session.telepastor.role === "GOVERNOR") {
+      governorId = session.telepastor.id;
+    }
+  }
+
+  if (parsed.data.role === "LEADER" && session.telepastor.role === "GOVERNOR") {
+    governorId = session.telepastor.id;
+  }
+
+  let leaderRecord = null;
+  let governorRecord = null;
+
+  if (leaderId) {
+    const { data } = await supabase
+      .from("telepastors")
+      .select("id, role, governor_id, leader_id")
+      .eq("id", leaderId)
+      .maybeSingle();
+    leaderRecord = data;
+    if (
+      parsed.data.role === "TELEPASTOR" &&
+      leaderRecord?.governor_id &&
+      (!governorId || governorId === leaderRecord.governor_id)
+    ) {
+      governorId = leaderRecord.governor_id;
+    }
+  }
+
+  if (governorId) {
+    const { data } = await supabase
+      .from("telepastors")
+      .select("id, role, governor_id, leader_id")
+      .eq("id", governorId)
+      .maybeSingle();
+    governorRecord = data;
+  }
+
   const hierarchyError = validateHierarchy({
     role: parsed.data.role,
-    leader_id: parsed.data.leader_id ?? null,
-    governor_id: parsed.data.governor_id ?? null,
+    leader_id: leaderId,
+    governor_id: governorId,
   });
 
   if (hierarchyError) {
@@ -86,32 +136,9 @@ export async function createTelepastorAction(
 
   const hierarchy = resolveHierarchyFields({
     role: parsed.data.role,
-    leader_id: parsed.data.leader_id,
-    governor_id: parsed.data.governor_id,
+    leader_id: leaderId,
+    governor_id: governorId,
   });
-
-  const supabase = await createClient();
-
-  let leaderRecord = null;
-  let governorRecord = null;
-
-  if (hierarchy.leader_id) {
-    const { data } = await supabase
-      .from("telepastors")
-      .select("id, role, governor_id, leader_id")
-      .eq("id", hierarchy.leader_id)
-      .maybeSingle();
-    leaderRecord = data;
-  }
-
-  if (hierarchy.governor_id) {
-    const { data } = await supabase
-      .from("telepastors")
-      .select("id, role, governor_id, leader_id")
-      .eq("id", hierarchy.governor_id)
-      .maybeSingle();
-    governorRecord = data;
-  }
 
   const placementError = validateCreatePlacement(
     session.telepastor,
@@ -128,6 +155,20 @@ export async function createTelepastorAction(
     return { success: false, error: placementError };
   }
 
+  if (parsed.data.role === "LEADER" && !hierarchy.governor_id) {
+    return {
+      success: false,
+      error: "Leaders must be assigned to a Governor.",
+    };
+  }
+
+  if (parsed.data.role === "TELEPASTOR" && !hierarchy.governor_id) {
+    return {
+      success: false,
+      error: "Telepastors must be assigned to a Governor.",
+    };
+  }
+
   let phoneNormalized: string;
 
   try {
@@ -140,7 +181,7 @@ export async function createTelepastorAction(
     };
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("telepastors")
     .insert({
       name: parsed.data.name,
@@ -157,6 +198,18 @@ export async function createTelepastorAction(
     .single();
 
   if (error || !data) {
+    console.error("[createTelepastorAction] insert failed", {
+      code: error && "code" in error ? error.code : undefined,
+      message: error?.message,
+      details: error && "details" in error ? error.details : undefined,
+      hint: error && "hint" in error ? error.hint : undefined,
+      role: parsed.data.role,
+      actorRole: session.telepastor.role,
+      actorId: session.telepastor.id,
+      governorId: hierarchy.governor_id,
+      leaderId: hierarchy.leader_id,
+    });
+
     return {
       success: false,
       error: toActionErrorMessage(error, "Unable to create Telepastor."),
@@ -172,7 +225,7 @@ export async function createTelepastorAction(
       password: temporaryPassword,
     });
 
-    const { error: linkError } = await supabase
+    const { error: linkError } = await admin
       .from("telepastors")
       .update({
         auth_user_id: authUserId,
@@ -181,7 +234,7 @@ export async function createTelepastorAction(
 
     if (linkError) {
       await deleteAuthUser(authUserId);
-      await supabase.from("telepastors").delete().eq("id", data.id);
+      await admin.from("telepastors").delete().eq("id", data.id);
       return {
         success: false,
         error: toActionErrorMessage(
@@ -191,7 +244,7 @@ export async function createTelepastorAction(
       };
     }
   } catch (provisionError) {
-    await supabase.from("telepastors").delete().eq("id", data.id);
+    await admin.from("telepastors").delete().eq("id", data.id);
     return {
       success: false,
       error:
@@ -336,13 +389,29 @@ export async function updateTelepastorRoleAction(
     return { success: false, error: hierarchyError };
   }
 
-  const hierarchy = resolveHierarchyFields({
+  let hierarchy = resolveHierarchyFields({
     role: parsed.data.role,
     leader_id: parsed.data.leader_id,
     governor_id: parsed.data.governor_id,
   });
 
   const supabase = await createClient();
+
+  if (parsed.data.role === "TELEPASTOR" && hierarchy.leader_id) {
+    const { data: leaderRecord } = await supabase
+      .from("telepastors")
+      .select("governor_id")
+      .eq("id", hierarchy.leader_id)
+      .maybeSingle();
+
+    if (leaderRecord?.governor_id) {
+      hierarchy = {
+        ...hierarchy,
+        governor_id: leaderRecord.governor_id,
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("telepastors")
     .update({

@@ -49,7 +49,14 @@ export function getGovernorIdForTelepastor(
     return telepastor.governor_id;
   }
 
-  return leader?.governor_id ?? null;
+  if (telepastor.role === "TELEPASTOR") {
+    if (telepastor.leader_id) {
+      return leader?.governor_id ?? telepastor.governor_id ?? null;
+    }
+    return telepastor.governor_id ?? null;
+  }
+
+  return null;
 }
 
 export function getLeaderIdForTelepastor(

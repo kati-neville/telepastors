@@ -64,8 +64,9 @@ function applyDirectoryFilters(
         entry.id === governorId ||
         (entry.role === "LEADER" && entry.governor_id === governorId) ||
         (entry.role === "TELEPASTOR" &&
-          entry.leader_id &&
-          byId.get(entry.leader_id)?.governor_id === governorId);
+          (entry.governor_id === governorId ||
+            (entry.leader_id != null &&
+              byId.get(entry.leader_id)?.governor_id === governorId)));
 
       if (!inGovernorOrg) {
         return false;

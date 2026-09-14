@@ -27,7 +27,7 @@ export function resolveHierarchyFields(input: HierarchyInput): {
     case "TELEPASTOR":
       return {
         leader_id: input.leader_id ?? null,
-        governor_id: null,
+        governor_id: input.governor_id ?? null,
       };
   }
 }
@@ -53,11 +53,8 @@ export function validateHierarchy(input: HierarchyInput): string | null {
   }
 
   if (role === "TELEPASTOR") {
-    if (governor_id) {
-      return "Telepastors are linked to a Governor through their Leader.";
-    }
-    if (!leader_id) {
-      return "Telepastors must be assigned to a Leader.";
+    if (!governor_id) {
+      return "Telepastors must be assigned to a Governor.";
     }
     return null;
   }
@@ -84,7 +81,7 @@ export function getAssignableRolesForCreate(
 }
 
 export function validateCreatePlacement(
-  actor: Pick<Telepastor, "id" | "role">,
+  actor: Pick<Telepastor, "id" | "role" | "governor_id">,
   input: HierarchyInput,
   leader?: HierarchyLookup | null,
   governor?: HierarchyLookup | null,
@@ -101,6 +98,9 @@ export function validateCreatePlacement(
     if (input.leader_id !== actor.id) {
       return "Leaders can only assign new Telepastors to themselves.";
     }
+    if (!actor.governor_id || input.governor_id !== actor.governor_id) {
+      return "Telepastors must stay under your Governor.";
+    }
     return null;
   }
 
@@ -113,11 +113,16 @@ export function validateCreatePlacement(
     }
 
     if (input.role === "TELEPASTOR") {
-      if (!leader || leader.role !== "LEADER") {
-        return "Selected Leader was not found.";
+      if (input.governor_id !== actor.id) {
+        return "Governors can only create Telepastors under their own organization.";
       }
-      if (leader.governor_id !== actor.id) {
-        return "Telepastors must be assigned to a Leader in your organization.";
+      if (input.leader_id) {
+        if (!leader || leader.role !== "LEADER") {
+          return "Selected Leader was not found.";
+        }
+        if (leader.governor_id !== actor.id) {
+          return "Telepastors must be assigned to a Leader in your organization.";
+        }
       }
       return null;
     }
@@ -132,8 +137,16 @@ export function validateCreatePlacement(
     }
 
     if (input.role === "TELEPASTOR") {
-      if (!leader || leader.role !== "LEADER") {
-        return "Selected Leader was not found.";
+      if (!governor || governor.role !== "GOVERNOR") {
+        return "Selected Governor was not found.";
+      }
+      if (input.leader_id) {
+        if (!leader || leader.role !== "LEADER") {
+          return "Selected Leader was not found.";
+        }
+        if (leader.governor_id !== input.governor_id) {
+          return "Selected Leader must belong to the selected Governor.";
+        }
       }
       return null;
     }

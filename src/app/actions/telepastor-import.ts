@@ -31,6 +31,7 @@ import {
   fetchTelepastorImportById,
   fetchTelepastorImportLookups,
 } from "@/lib/queries/telepastor-imports";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   ACCEPTED_IMPORT_EXTENSIONS,
@@ -311,6 +312,7 @@ export async function confirmTelepastorImportAction(
   );
 
   const supabase = await createClient();
+  const admin = createServiceRoleClient();
   const credentials: TelepastorImportCredential[] = [];
   const commitErrors: string[] = [];
   let importedRows = 0;
@@ -319,7 +321,7 @@ export async function confirmTelepastorImportAction(
     const row = validRows[index]!;
     const temporaryPassword = getDefaultTelepastorPassword();
 
-    const { data: created, error: insertError } = await supabase
+    const { data: created, error: insertError } = await admin
       .from("telepastors")
       .insert({
         name: row.name,
@@ -349,21 +351,21 @@ export async function confirmTelepastorImportAction(
         password: temporaryPassword,
       });
 
-      const { error: linkError } = await supabase
+      const { error: linkError } = await admin
         .from("telepastors")
         .update({ auth_user_id: authUserId })
         .eq("id", created.id);
 
       if (linkError) {
         await deleteAuthUser(authUserId);
-        await supabase.from("telepastors").delete().eq("id", created.id);
+        await admin.from("telepastors").delete().eq("id", created.id);
         commitErrors.push(
           `Row ${row.rowNumber}: ${toActionErrorMessage(linkError, "Unable to link sign-in account.")}`,
         );
         continue;
       }
     } catch (provisionError) {
-      await supabase.from("telepastors").delete().eq("id", created.id);
+      await admin.from("telepastors").delete().eq("id", created.id);
       commitErrors.push(
         `Row ${row.rowNumber}: ${
           provisionError instanceof Error

@@ -331,6 +331,8 @@ export function TelepastorImportWizard() {
                   </li>
                   <li>
                     Match Leaders and Governors by phone number (not name).
+                    Leader Phone is optional for Telepastors — leave blank to
+                    place them directly under a Governor.
                   </li>
                   <li>
                     Temporary password for every new account is{" "}

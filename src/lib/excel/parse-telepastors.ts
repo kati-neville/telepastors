@@ -67,7 +67,7 @@ export function validateTelepastorImportRows(
   mapping: TelepastorImportColumnMapping,
   existingNormalizedPhones: Set<string>,
   lookups: TelepastorImportLookupMaps,
-  actor: Pick<Telepastor, "id" | "role">,
+  actor: Pick<Telepastor, "id" | "role" | "governor_id">,
 ): TelepastorImportValidationSummary {
   const seenInFile = new Set<string>();
   const validated: ValidatedTelepastorImportRow[] = [];
@@ -129,25 +129,75 @@ export function validateTelepastorImportRows(
     if (role === "TELEPASTOR") {
       if (actor.role === "LEADER") {
         leaderId = actor.id;
+        governorId = actor.governor_id;
         leader = {
           id: actor.id,
           role: "LEADER",
+          governor_id: actor.governor_id,
+          leader_id: null,
+        };
+        if (actor.governor_id) {
+          governor = {
+            id: actor.governor_id,
+            role: "GOVERNOR",
+            governor_id: null,
+            leader_id: null,
+          };
+        }
+      } else if (actor.role === "GOVERNOR") {
+        governorId = actor.id;
+        governor = {
+          id: actor.id,
+          role: "GOVERNOR",
           governor_id: null,
           leader_id: null,
         };
-      } else if (!leaderPhone) {
-        errors.push("Leader Phone is required for TELEPASTOR rows");
-      } else {
-        const leaderNormalized = normalizePhone(leaderPhone);
-        if (!leaderNormalized.ok) {
-          errors.push(`Leader phone: ${leaderNormalized.error}`);
-        } else {
-          const match = lookups.byPhone.get(leaderNormalized.normalized);
-          if (!match || match.role !== "LEADER") {
-            errors.push("Leader Phone does not match an existing Leader");
+
+        if (leaderPhone) {
+          const leaderNormalized = normalizePhone(leaderPhone);
+          if (!leaderNormalized.ok) {
+            errors.push(`Leader phone: ${leaderNormalized.error}`);
           } else {
-            leaderId = match.id;
-            leader = match;
+            const match = lookups.byPhone.get(leaderNormalized.normalized);
+            if (!match || match.role !== "LEADER") {
+              errors.push("Leader Phone does not match an existing Leader");
+            } else {
+              leaderId = match.id;
+              leader = match;
+            }
+          }
+        }
+      } else {
+        // SUPER_ADMIN: Governor Phone required; Leader Phone optional
+        if (!governorPhone) {
+          errors.push("Governor Phone is required for TELEPASTOR rows");
+        } else {
+          const governorNormalized = normalizePhone(governorPhone);
+          if (!governorNormalized.ok) {
+            errors.push(`Governor phone: ${governorNormalized.error}`);
+          } else {
+            const match = lookups.byPhone.get(governorNormalized.normalized);
+            if (!match || match.role !== "GOVERNOR") {
+              errors.push("Governor Phone does not match an existing Governor");
+            } else {
+              governorId = match.id;
+              governor = match;
+            }
+          }
+        }
+
+        if (leaderPhone) {
+          const leaderNormalized = normalizePhone(leaderPhone);
+          if (!leaderNormalized.ok) {
+            errors.push(`Leader phone: ${leaderNormalized.error}`);
+          } else {
+            const match = lookups.byPhone.get(leaderNormalized.normalized);
+            if (!match || match.role !== "LEADER") {
+              errors.push("Leader Phone does not match an existing Leader");
+            } else {
+              leaderId = match.id;
+              leader = match;
+            }
           }
         }
       }
@@ -181,6 +231,24 @@ export function validateTelepastorImportRows(
     }
 
     if (role && errors.length === 0) {
+      // If a leader is set, align governor to that leader's governor when needed
+      if (
+        role === "TELEPASTOR" &&
+        leader &&
+        leader.governor_id &&
+        (!governorId || governorId === leader.governor_id)
+      ) {
+        governorId = leader.governor_id;
+        if (!governor) {
+          governor = {
+            id: leader.governor_id,
+            role: "GOVERNOR",
+            governor_id: null,
+            leader_id: null,
+          };
+        }
+      }
+
       const hierarchyError = validateHierarchy({
         role,
         leader_id: leaderId,

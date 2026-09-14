@@ -87,7 +87,8 @@ export function RoleManagementSection({
     startTransition(async () => {
       const result = await updateTelepastorRoleAction(telepastor.id, {
         role,
-        governor_id: role === "LEADER" ? governorId : null,
+        governor_id:
+          role === "LEADER" || role === "TELEPASTOR" ? governorId : null,
         leader_id: role === "TELEPASTOR" ? leaderId : null,
         confirm: true,
       });
@@ -146,13 +147,16 @@ export function RoleManagementSection({
           </Select>
         </div>
 
-        {role === "LEADER" ? (
+        {role === "LEADER" || role === "TELEPASTOR" ? (
           <div className="space-y-2">
             <Label>Governor</Label>
             <Select
               value={governorId ?? ""}
               items={governorItems}
-              onValueChange={(value) => setGovernorId(value || null)}
+              onValueChange={(value) => {
+                setGovernorId(value || null);
+                setLeaderId(null);
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select governor" />
@@ -170,16 +174,24 @@ export function RoleManagementSection({
 
         {role === "TELEPASTOR" ? (
           <div className="space-y-2">
-            <Label>Leader</Label>
+            <Label>Leader (optional)</Label>
             <Select
-              value={leaderId ?? ""}
-              items={leaderItems}
-              onValueChange={(value) => setLeaderId(value || null)}
+              value={leaderId ?? "__none__"}
+              items={[
+                { label: "No leader (direct to Governor)", value: "__none__" },
+                ...leaderItems,
+              ]}
+              onValueChange={(value) =>
+                setLeaderId(!value || value === "__none__" ? null : value)
+              }
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select leader" />
+                <SelectValue placeholder="Optional leader" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">
+                  No leader (direct to Governor)
+                </SelectItem>
                 {filteredLeaders.map((leader) => (
                   <SelectItem key={leader.id} value={leader.id}>
                     {leader.name}

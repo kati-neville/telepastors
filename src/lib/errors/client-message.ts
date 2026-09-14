@@ -29,11 +29,31 @@ export function toClientErrorMessage(
     return fallback;
   }
 
-  if (INTERNAL_PATTERNS.some((pattern) => pattern.test(message))) {
+  const trimmed = message.trim();
+
+  if (/duplicate key|unique constraint|telepastors_phone_normalized/i.test(trimmed)) {
+    return "That phone number is already registered to another ministry member.";
+  }
+
+  if (
+    /row-level security/i.test(trimmed) ||
+    /PGRST116/i.test(trimmed) ||
+    /PGRST301/i.test(trimmed) ||
+    /42501/.test(trimmed) ||
+    /JSON object requested, multiple \(or no\) rows returned/i.test(trimmed)
+  ) {
+    return "You do not have permission to create this member with the selected role or placement.";
+  }
+
+  if (/enforce_telepastor_hierarchy|Telepastors must be assigned|must belong to the same Governor/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (INTERNAL_PATTERNS.some((pattern) => pattern.test(trimmed))) {
     return fallback;
   }
 
-  return message.trim();
+  return trimmed;
 }
 
 export function toActionErrorMessage(

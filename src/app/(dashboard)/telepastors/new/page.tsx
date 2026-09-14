@@ -88,6 +88,7 @@ export default async function NewTelepastorPage() {
             assignableRoles={assignableRoles}
             actorId={session.telepastor.id}
             actorRole={session.telepastor.role}
+            actorGovernorId={session.telepastor.governor_id}
           />
         </CardContent>
       </Card>

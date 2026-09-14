@@ -21,11 +21,11 @@ export const createTelepastorSchema = z
       });
     }
 
-    if (values.role === "TELEPASTOR" && !values.leader_id) {
+    if (values.role === "TELEPASTOR" && !values.governor_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Select a Leader for this Telepastor",
-        path: ["leader_id"],
+        message: "Select a Governor for this Telepastor",
+        path: ["governor_id"],
       });
     }
   });
@@ -60,11 +60,11 @@ export const updateTelepastorRoleSchema = z
       });
     }
 
-    if (values.role === "TELEPASTOR" && !values.leader_id) {
+    if (values.role === "TELEPASTOR" && !values.governor_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "A Leader is required for Telepastors",
-        path: ["leader_id"],
+        message: "A Governor is required for Telepastors",
+        path: ["governor_id"],
       });
     }
   });
