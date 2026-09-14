@@ -71,6 +71,25 @@ export function canToggleTelepastorActive(
   return canManageTelepastor(context, target);
 }
 
+export function canDeleteTelepastor(
+  context: AuthorizationContext,
+  target: Telepastor,
+): boolean {
+  if (context.telepastor.role !== "SUPER_ADMIN") {
+    return false;
+  }
+
+  if (context.telepastor.id === target.id) {
+    return false;
+  }
+
+  if (target.role === "SUPER_ADMIN") {
+    return false;
+  }
+
+  return true;
+}
+
 export function canManageUsers(context: AuthorizationContext): boolean {
   return hasRoleAtLeast(context.telepastor.role, "LEADER");
 }

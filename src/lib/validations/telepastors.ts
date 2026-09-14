@@ -78,6 +78,13 @@ export const toggleActiveSchema = z.object({
 
 export type ToggleActiveValues = z.infer<typeof toggleActiveSchema>;
 
+export const deleteTelepastorSchema = z.object({
+  confirmName: z.string().trim().min(1, "Type the member's name to confirm"),
+  confirm: z.literal(true, { message: "Confirmation is required" }),
+});
+
+export type DeleteTelepastorValues = z.infer<typeof deleteTelepastorSchema>;
+
 export const telepastorsFilterSchema = z.object({
   q: z.string().optional(),
   role: z.enum(["ALL", "GOVERNOR", "LEADER", "TELEPASTOR"]).default("ALL"),

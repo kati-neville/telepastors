@@ -5,6 +5,7 @@ export const AUDIT_ACTIONS = {
   TELEPASTOR_ROLE_CHANGED: "telepastor.role_changed",
   TELEPASTOR_ACTIVATED: "telepastor.activated",
   TELEPASTOR_DEACTIVATED: "telepastor.deactivated",
+  TELEPASTOR_DELETED: "telepastor.deleted",
   TELEPASTOR_PASSWORD_RESET: "telepastor.password_reset",
   TELEPASTOR_PHOTO_UPDATED: "telepastor.photo_updated",
   CAMPAIGN_CREATED: "campaign.created",

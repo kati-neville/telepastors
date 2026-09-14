@@ -69,7 +69,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       </div>
 
       {isLeadership && filterOptions ? (
-        <Suspense fallback={<Skeleton className="h-40 w-full rounded-xl" />}>
+        <Suspense fallback={<Skeleton className="ml-auto h-9 w-28 rounded-lg" />}>
           <ReportFilters
             filters={filters}
             options={filterOptions}

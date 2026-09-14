@@ -5,6 +5,7 @@ import {
 	TelepastorsEmptyState,
 	TelepastorsFilters,
 } from "@/components/telepastors/telepastors-filters";
+import { TelepastorDirectoryStats } from "@/components/telepastors/telepastor-directory-stats";
 import { TelepastorMemberCards } from "@/components/telepastors/telepastor-member-cards";
 import { TelepastorsTable } from "@/components/telepastors/telepastors-table";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { requireAuthSession } from "@/lib/auth/session";
 import {
 	fetchGovernorOptions,
 	fetchLeaderOptions,
-	fetchTelepastorsDirectory,
+	fetchTelepastorsDirectoryPage,
 } from "@/lib/queries/telepastors";
 import { telepastorsFilterSchema } from "@/lib/validations/telepastors";
 
@@ -35,7 +36,7 @@ function getParam(
 }
 
 function FiltersFallback() {
-	return <Skeleton className="h-36 w-full rounded-xl" />;
+	return <Skeleton className="ml-auto h-9 w-28 rounded-lg" />;
 }
 
 async function TelepastorsDirectory({
@@ -52,8 +53,8 @@ async function TelepastorsDirectory({
 		status: getParam(searchParams, "status") ?? "all",
 	});
 
-	const [telepastors, governors, leaders] = await Promise.all([
-		fetchTelepastorsDirectory(filters),
+	const [{ telepastors, counts }, governors, leaders] = await Promise.all([
+		fetchTelepastorsDirectoryPage(filters),
 		session.telepastor.role === "SUPER_ADMIN"
 			? fetchGovernorOptions()
 			: Promise.resolve([]),
@@ -81,32 +82,32 @@ async function TelepastorsDirectory({
 					</p>
 				</div>
 
-				{(canCreate || canImport) && (
-					<div className="flex flex-wrap gap-2">
-						{canImport ? (
-							<Button
-								variant="outline"
-								render={<Link href="/telepastors/import" />}
-							>
-								<Upload />
-								Bulk import
-							</Button>
-						) : null}
-						{canCreate ? (
-							<Button render={<Link href="/telepastors/new" />}>
-								<Plus />
-								Add Telepastor
-							</Button>
-						) : null}
-					</div>
-				)}
+				<div className="flex flex-wrap items-center gap-2">
+					<TelepastorsFilters
+						viewerRole={session.telepastor.role}
+						governors={governors}
+						leaders={leaders}
+						className="justify-start"
+					/>
+					{canImport ? (
+						<Button
+							variant="outline"
+							render={<Link href="/telepastors/import" />}
+						>
+							<Upload />
+							Bulk import
+						</Button>
+					) : null}
+					{canCreate ? (
+						<Button render={<Link href="/telepastors/new" />}>
+							<Plus />
+							Add Telepastor
+						</Button>
+					) : null}
+				</div>
 			</div>
 
-			<TelepastorsFilters
-				viewerRole={session.telepastor.role}
-				governors={governors}
-				leaders={leaders}
-			/>
+			<TelepastorDirectoryStats counts={counts} />
 
 			{telepastors.length === 0 ? (
 				<TelepastorsEmptyState canCreate={canCreate} canImport={canImport} />

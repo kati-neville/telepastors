@@ -24,7 +24,7 @@ function getParam(
 }
 
 function FiltersFallback() {
-  return <Skeleton className="h-36 w-full rounded-xl" />;
+  return <Skeleton className="ml-auto h-9 w-28 rounded-lg" />;
 }
 
 async function BirthdaysDirectory({

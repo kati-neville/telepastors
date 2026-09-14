@@ -12,6 +12,7 @@ import { recordAuditEvent } from "@/lib/audit/log";
 import {
   canChangeRole,
   canCreateTelepastor,
+  canDeleteTelepastor,
   canEditTelepastorProfile,
   canManageTelepastor,
   canToggleTelepastorActive,
@@ -31,6 +32,7 @@ import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   createTelepastorSchema,
+  deleteTelepastorSchema,
   PROFILE_PHOTO_ACCEPT,
   PROFILE_PHOTO_MAX_BYTES,
   toggleActiveSchema,
@@ -499,6 +501,135 @@ export async function toggleTelepastorActiveAction(
   });
 
   revalidateTelepastorPaths(id);
+  return { success: true, id };
+}
+
+export async function deleteTelepastorAction(
+  id: string,
+  values: unknown,
+): Promise<ActionResult> {
+  const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
+  const existing = await fetchTelepastorById(id);
+
+  if (!existing) {
+    return { success: false, error: "Telepastor not found." };
+  }
+
+  if (!canDeleteTelepastor(context, existing)) {
+    return {
+      success: false,
+      error: "Only Super Admins can permanently delete members.",
+    };
+  }
+
+  const parsed = deleteTelepastorSchema.safeParse(values);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Confirmation is required.",
+    };
+  }
+
+  if (
+    parsed.data.confirmName.trim().toLocaleLowerCase() !==
+    existing.name.trim().toLocaleLowerCase()
+  ) {
+    return {
+      success: false,
+      error: "Typed name does not match this member. Deletion cancelled.",
+    };
+  }
+
+  const admin = createServiceRoleClient();
+
+  // Leaders are optional on telepastors — detach the team so the leader can be removed.
+  const { error: detachLeaderError } = await admin
+    .from("telepastors")
+    .update({ leader_id: null })
+    .eq("leader_id", id);
+
+  if (detachLeaderError) {
+    return {
+      success: false,
+      error: toActionErrorMessage(
+        detachLeaderError,
+        "Unable to detach members who report to this leader.",
+      ),
+    };
+  }
+
+  // Governors are required — refuse if anyone still sits under this governor.
+  const { count: governorDependents, error: governorCountError } = await admin
+    .from("telepastors")
+    .select("id", { count: "exact", head: true })
+    .eq("governor_id", id);
+
+  if (governorCountError) {
+    return {
+      success: false,
+      error: toActionErrorMessage(
+        governorCountError,
+        "Unable to check members under this governor.",
+      ),
+    };
+  }
+
+  if ((governorDependents ?? 0) > 0) {
+    return {
+      success: false,
+      error: `This governor still has ${governorDependents} member${
+        governorDependents === 1 ? "" : "s"
+      } assigned. Reassign them to another governor first.`,
+    };
+  }
+
+  await recordAuditEvent({
+    actorId: session.telepastor.id,
+    action: AUDIT_ACTIONS.TELEPASTOR_DELETED,
+    entityType: "telepastor",
+    entityId: id,
+    metadata: {
+      name: existing.name,
+      phone: existing.phone,
+      role: existing.role,
+    },
+  });
+
+  if (existing.auth_user_id) {
+    try {
+      await deleteAuthUser(existing.auth_user_id);
+    } catch (error) {
+      return {
+        success: false,
+        error: toActionErrorMessage(
+          error,
+          "Unable to delete the sign-in account.",
+        ),
+      };
+    }
+  }
+
+  if (existing.profile_picture_url) {
+    const pathMatch = existing.profile_picture_url.match(
+      /profile-pictures\/(.+?)(?:\?|$)/,
+    );
+    const storagePath = pathMatch?.[1];
+    if (storagePath) {
+      await admin.storage.from("profile-pictures").remove([storagePath]);
+    }
+  }
+
+  const { error } = await admin.from("telepastors").delete().eq("id", id);
+
+  if (error) {
+    return {
+      success: false,
+      error: toActionErrorMessage(error, "Unable to delete this member."),
+    };
+  }
+
+  revalidateTelepastorPaths();
   return { success: true, id };
 }
 

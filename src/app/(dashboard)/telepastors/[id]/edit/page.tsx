@@ -4,6 +4,7 @@ import {
   requireTelepastorEditAccess,
 } from "@/app/actions/telepastors";
 import { ActiveStatusSection } from "@/components/telepastors/active-status-section";
+import { DeleteTelepastorSection } from "@/components/telepastors/delete-telepastor-section";
 import { EditTelepastorProfileForm } from "@/components/telepastors/edit-telepastor-profile-form";
 import { ProfilePhotoUpload } from "@/components/telepastors/profile-photo-upload";
 import { RoleManagementSection } from "@/components/telepastors/role-management-section";
@@ -16,7 +17,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { canChangeRole, canToggleTelepastorActive } from "@/lib/auth/permissions";
+import {
+  canChangeRole,
+  canDeleteTelepastor,
+  canToggleTelepastorActive,
+} from "@/lib/auth/permissions";
 import {
   fetchGovernorOptions,
   fetchLeaderOptions,
@@ -79,6 +84,10 @@ export default async function EditTelepastorPage({
       {canToggleTelepastorActive(context, telepastor) &&
       telepastor.role !== "SUPER_ADMIN" ? (
         <ActiveStatusSection telepastor={telepastor} />
+      ) : null}
+
+      {canDeleteTelepastor(context, telepastor) ? (
+        <DeleteTelepastorSection telepastor={telepastor} />
       ) : null}
     </div>
   );
