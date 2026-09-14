@@ -94,3 +94,8 @@ export const telepastorsFilterSchema = z.object({
 });
 
 export type TelepastorsFilterValues = z.infer<typeof telepastorsFilterSchema>;
+
+export const DEFAULT_TELEPASTORS_FILTERS: TelepastorsFilterValues = {
+	role: "ALL",
+	status: "all",
+};

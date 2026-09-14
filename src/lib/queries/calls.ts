@@ -102,7 +102,10 @@ async function enrichAssignedContacts(
   const contactIds = contacts.map((contact) => contact.id);
 
   const [{ data: campaigns }, { data: attempts }] = await Promise.all([
-    supabase.from("campaigns").select("id, name").in("id", campaignIds),
+    supabase
+      .from("campaigns")
+      .select("id, name, call_script")
+      .in("id", campaignIds),
     supabase
       .from("call_attempts")
       .select("contact_id")
@@ -110,7 +113,13 @@ async function enrichAssignedContacts(
   ]);
 
   const campaignMap = new Map(
-    (campaigns ?? []).map((campaign) => [campaign.id, campaign.name]),
+    (campaigns ?? []).map((campaign) => [
+      campaign.id,
+      {
+        name: campaign.name,
+        call_script: campaign.call_script,
+      },
+    ]),
   );
 
   const attemptCountMap = new Map<string, number>();
@@ -121,12 +130,16 @@ async function enrichAssignedContacts(
     );
   }
 
-  return contacts.map((contact) => ({
-    ...contact,
-    latest_response: contact.latest_response as CallResponse | null,
-    campaign_name: campaignMap.get(contact.campaign_id) ?? "Unknown campaign",
-    attempt_count: attemptCountMap.get(contact.id) ?? 0,
-  }));
+  return contacts.map((contact) => {
+    const campaign = campaignMap.get(contact.campaign_id);
+    return {
+      ...contact,
+      latest_response: contact.latest_response as CallResponse | null,
+      campaign_name: campaign?.name ?? "Unknown campaign",
+      campaign_call_script: campaign?.call_script ?? null,
+      attempt_count: attemptCountMap.get(contact.id) ?? 0,
+    };
+  });
 }
 
 export async function fetchCallQueueStats(

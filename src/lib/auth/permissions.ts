@@ -154,6 +154,16 @@ export function canImportCampaignContacts(
   return context.telepastor.role === "SUPER_ADMIN";
 }
 
+export function canEditCampaignCallScript(
+  context: AuthorizationContext,
+): boolean {
+  return context.telepastor.role === "SUPER_ADMIN";
+}
+
+export function canClearAllContacts(context: AuthorizationContext): boolean {
+  return context.telepastor.role === "SUPER_ADMIN";
+}
+
 export function canAssignContacts(context: AuthorizationContext): boolean {
   return canDistributeContacts(context);
 }

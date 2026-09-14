@@ -23,10 +23,15 @@ type FiltersDialogProps = {
 	title?: string;
 	triggerLabel?: string;
 	activeCount?: number;
+	clearDisabled?: boolean;
 	onClear?: () => void;
+	onDone?: () => void;
 	clearLabel?: string;
+	doneLabel?: string;
 	contentClassName?: string;
 	className?: string;
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
 };
 
 export function FiltersDialog({
@@ -35,17 +40,23 @@ export function FiltersDialog({
 	title = "Filters",
 	triggerLabel = "Filters",
 	activeCount = 0,
+	clearDisabled,
 	onClear,
+	onDone,
 	clearLabel = "Clear",
+	doneLabel = "Done",
 	contentClassName,
 	className,
+	open,
+	onOpenChange,
 }: FiltersDialogProps) {
+	const isClearDisabled = clearDisabled ?? activeCount === 0;
+
 	return (
 		<div className={cn("flex justify-end", className)}>
-			<Dialog>
+			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogTrigger
-					render={<Button type="button" variant="outline" className="gap-2" />}
-				>
+					render={<Button type="button" variant="outline" className="gap-2" />}>
 					<ListFilter className="size-4" />
 					{triggerLabel}
 					{activeCount > 0 ? (
@@ -73,12 +84,24 @@ export function FiltersDialog({
 								variant="ghost"
 								className="sm:mr-auto"
 								onClick={onClear}
-								disabled={activeCount === 0}
-							>
+								disabled={isClearDisabled}>
 								{clearLabel}
 							</Button>
 						) : null}
-						<DialogClose render={<Button type="button" />}>Done</DialogClose>
+						{onDone ? (
+							<Button
+								type="button"
+								onClick={() => {
+									onDone();
+									onOpenChange?.(false);
+								}}>
+								{doneLabel}
+							</Button>
+						) : (
+							<DialogClose render={<Button type="button" />}>
+								{doneLabel}
+							</DialogClose>
+						)}
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

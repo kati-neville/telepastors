@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   canCreateCampaign,
+  canClearAllContacts,
   canEditCampaign,
+  canEditCampaignCallScript,
   canImportCampaignContacts,
   canManageCampaign,
 } from "@/lib/auth/permissions";
@@ -28,11 +30,15 @@ import {
   fetchContactImportById,
   fetchExistingNormalizedPhones,
 } from "@/lib/queries/contacts";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   ACCEPTED_IMPORT_EXTENSIONS,
   ACCEPTED_IMPORT_TYPES,
+  campaignCallScriptSchema,
   campaignFormSchema,
+  clearAllContactsSchema,
+  CLEAR_ALL_CONTACTS_CONFIRM_PHRASE,
   columnMappingSchema,
   MAX_IMPORT_FILE_BYTES,
 } from "@/lib/validations/campaigns";
@@ -43,10 +49,17 @@ type ActionResult<T = undefined> =
 
 function revalidateCampaignPaths(campaignId?: string) {
   revalidatePath("/campaigns");
+  revalidatePath("/assignments");
+  revalidatePath("/my-calls");
+  revalidatePath("/reports");
+  revalidatePath("/activity");
+  revalidatePath("/contacts-with-notes");
+  revalidatePath("/dashboard");
   if (campaignId) {
     revalidatePath(`/campaigns/${campaignId}`);
     revalidatePath(`/campaigns/${campaignId}/edit`);
     revalidatePath(`/campaigns/${campaignId}/import`);
+    revalidatePath(`/campaigns/${campaignId}/distribute`);
   }
 }
 
@@ -157,6 +170,65 @@ export async function updateCampaignAction(
   });
 
   revalidateCampaignPaths(id);
+  return { success: true };
+}
+
+export async function updateCampaignCallScriptAction(
+  id: string,
+  values: unknown,
+): Promise<ActionResult> {
+  const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
+
+  if (!canEditCampaignCallScript(context)) {
+    return {
+      success: false,
+      error: "Only Super Admins can set the campaign call script.",
+    };
+  }
+
+  const campaign = await fetchCampaignById(id);
+  if (!campaign) {
+    return { success: false, error: "Campaign not found." };
+  }
+
+  const parsed = campaignCallScriptSchema.safeParse(values);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid call script.",
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("campaigns")
+    .update({
+      call_script: parsed.data.call_script || null,
+    })
+    .eq("id", id);
+
+  if (error) {
+    return {
+      success: false,
+      error: toActionErrorMessage(error, "Unable to save call script."),
+    };
+  }
+
+  await recordAuditEvent({
+    actorId: session.telepastor.id,
+    action: AUDIT_ACTIONS.CAMPAIGN_CALL_SCRIPT_UPDATED,
+    entityType: "campaign",
+    entityId: id,
+    metadata: {
+      name: campaign.name,
+      hasScript: Boolean(parsed.data.call_script),
+    },
+  });
+
+  revalidateCampaignPaths(id);
+  revalidatePath("/my-calls");
+  revalidatePath("/my-calls/queue");
   return { success: true };
 }
 
@@ -528,4 +600,116 @@ export async function downloadContactImportTemplateAction(): Promise<
       filename: CONTACT_IMPORT_TEMPLATE_FILENAME,
     },
   };
+}
+
+const ALL_ROWS_FILTER_ID = "00000000-0000-0000-0000-000000000000";
+
+export async function clearAllContactsAction(
+  values: unknown,
+): Promise<ActionResult<{ deletedContacts: number }>> {
+  const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
+
+  if (!canClearAllContacts(context)) {
+    return {
+      success: false,
+      error: "Only Super Admins can delete all contacts.",
+    };
+  }
+
+  const parsed = clearAllContactsSchema.safeParse(values);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Confirmation is required.",
+    };
+  }
+
+  if (parsed.data.confirmPhrase !== CLEAR_ALL_CONTACTS_CONFIRM_PHRASE) {
+    return {
+      success: false,
+      error: `Type ${CLEAR_ALL_CONTACTS_CONFIRM_PHRASE} exactly to confirm.`,
+    };
+  }
+
+  const admin = createServiceRoleClient();
+
+  const { count: contactCount, error: countError } = await admin
+    .from("contacts")
+    .select("id", { count: "exact", head: true });
+
+  if (countError) {
+    return {
+      success: false,
+      error: toActionErrorMessage(countError, "Unable to count contacts."),
+    };
+  }
+
+  const deletedContacts = contactCount ?? 0;
+
+  const { error: resetPointersError } = await admin
+    .from("contacts")
+    .update({
+      current_assignee_id: null,
+      current_assignment_id: null,
+      assignment_status: "UNASSIGNED",
+    })
+    .neq("id", ALL_ROWS_FILTER_ID);
+
+  if (resetPointersError) {
+    return {
+      success: false,
+      error: toActionErrorMessage(
+        resetPointersError,
+        "Unable to clear contact assignment links.",
+      ),
+    };
+  }
+
+  const deleteSteps: Array<{
+    table:
+      | "call_attempts"
+      | "contact_assignments"
+      | "contacts"
+      | "contact_imports"
+      | "distribution_jobs";
+    label: string;
+  }> = [
+    { table: "call_attempts", label: "call history" },
+    { table: "contact_assignments", label: "assignments" },
+    { table: "contacts", label: "contacts" },
+    { table: "contact_imports", label: "import records" },
+    { table: "distribution_jobs", label: "distribution jobs" },
+  ];
+
+  for (const step of deleteSteps) {
+    const { error } = await admin
+      .from(step.table)
+      .delete()
+      .neq("id", ALL_ROWS_FILTER_ID);
+
+    if (error) {
+      return {
+        success: false,
+        error: toActionErrorMessage(
+          error,
+          `Unable to delete ${step.label}.`,
+        ),
+      };
+    }
+  }
+
+  await recordAuditEvent({
+    actorId: session.telepastor.id,
+    action: AUDIT_ACTIONS.CONTACTS_CLEARED,
+    entityType: "contacts",
+    entityId: null,
+    metadata: {
+      scope: "all",
+      deletedContacts,
+    },
+  });
+
+  revalidateCampaignPaths();
+  return { success: true, data: { deletedContacts } };
 }

@@ -1,21 +1,27 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { CampaignCards } from "@/components/campaigns/campaign-cards";
+import { ClearAllContactsSection } from "@/components/campaigns/clear-all-contacts-section";
 import {
   CampaignsEmptyState,
   CampaignsTable,
 } from "@/components/campaigns/campaigns-table";
 import { Button } from "@/components/ui/button";
 import { enforcePageAccess } from "@/lib/auth/guards";
-import { canCreateCampaign } from "@/lib/auth/permissions";
+import {
+  canClearAllContacts,
+  canCreateCampaign,
+} from "@/lib/auth/permissions";
 import { requireAuthSession } from "@/lib/auth/session";
 import { fetchCampaignSummaries } from "@/lib/queries/campaigns";
 
 export default async function CampaignsPage() {
   await enforcePageAccess("/campaigns");
   const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
   const campaigns = await fetchCampaignSummaries();
-  const canCreate = canCreateCampaign({ telepastor: session.telepastor });
+  const canCreate = canCreateCampaign(context);
+  const canClearContacts = canClearAllContacts(context);
 
   return (
     <div className="space-y-6">
@@ -44,6 +50,8 @@ export default async function CampaignsPage() {
           <CampaignCards campaigns={campaigns} />
         </>
       )}
+
+      {canClearContacts ? <ClearAllContactsSection /> : null}
     </div>
   );
 }

@@ -82,6 +82,7 @@ export type Campaign = {
   description: string | null;
   event_date: string | null;
   status: CampaignStatus;
+  call_script: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -241,6 +242,7 @@ export type CallAttemptWithContact = CallAttempt & {
 
 export type AssignedContact = Contact & {
   campaign_name: string;
+  campaign_call_script: string | null;
   attempt_count: number;
 };
 

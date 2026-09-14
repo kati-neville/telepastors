@@ -1,4 +1,5 @@
 import { getGovernorIdForTelepastor } from "@/lib/auth/roles";
+import { applyTelepastorDirectoryFilters } from "@/lib/telepastors/directory-filters";
 import { createClient } from "@/lib/supabase/server";
 import type {
 	MinistryRole,
@@ -19,9 +20,9 @@ export type TelepastorDirectoryCounts = {
 function enrichDirectoryEntries(
 	telepastors: Telepastor[],
 ): TelepastorDirectoryEntry[] {
-	const byId = new Map(telepastors.map(entry => [entry.id, entry]));
+	const byId = new Map(telepastors.map((entry) => [entry.id, entry]));
 
-	return telepastors.map(entry => {
+	return telepastors.map((entry) => {
 		const leader = entry.leader_id ? byId.get(entry.leader_id) : undefined;
 		const governorId =
 			entry.role === "LEADER"
@@ -35,63 +36,6 @@ function enrichDirectoryEntries(
 			leader_name: leader?.name ?? null,
 			governor_name: governor?.name ?? null,
 		};
-	});
-}
-
-function applyDirectoryFilters(
-	entries: TelepastorDirectoryEntry[],
-	filters: TelepastorsFilterValues,
-): TelepastorDirectoryEntry[] {
-	const query = filters.q?.trim().toLowerCase() ?? "";
-	const byId = new Map(entries.map(entry => [entry.id, entry]));
-
-	return entries.filter(entry => {
-		if (query) {
-			const matchesName = entry.name.toLowerCase().includes(query);
-			const matchesPhone = entry.phone.toLowerCase().includes(query);
-			if (!matchesName && !matchesPhone) {
-				return false;
-			}
-		}
-
-		if (filters.role !== "ALL" && entry.role !== filters.role) {
-			return false;
-		}
-
-		if (filters.status === "active" && !entry.is_active) {
-			return false;
-		}
-
-		if (filters.status === "inactive" && entry.is_active) {
-			return false;
-		}
-
-		if (filters.governor) {
-			const governorId = filters.governor;
-			const inGovernorOrg =
-				entry.id === governorId ||
-				(entry.role === "LEADER" && entry.governor_id === governorId) ||
-				(entry.role === "TELEPASTOR" &&
-					(entry.governor_id === governorId ||
-						(entry.leader_id != null &&
-							byId.get(entry.leader_id)?.governor_id === governorId)));
-
-			if (!inGovernorOrg) {
-				return false;
-			}
-		}
-
-		if (filters.leader) {
-			const inLeaderTeam =
-				entry.id === filters.leader ||
-				(entry.role === "TELEPASTOR" && entry.leader_id === filters.leader);
-
-			if (!inLeaderTeam) {
-				return false;
-			}
-		}
-
-		return true;
 	});
 }
 
@@ -146,11 +90,11 @@ export async function fetchTelepastorsDirectory(
 	filters: TelepastorsFilterValues,
 ): Promise<TelepastorDirectoryEntry[]> {
 	const enriched = await fetchVisibleTelepastorsDirectory();
-	return applyDirectoryFilters(enriched, filters);
+	return applyTelepastorDirectoryFilters(enriched, filters);
 }
 
 export async function fetchTelepastorsDirectoryPage(
-	filters: TelepastorsFilterValues,
+	filters: TelepastorsFilterValues = { role: "ALL", status: "all" },
 ): Promise<{
 	telepastors: TelepastorDirectoryEntry[];
 	counts: TelepastorDirectoryCounts;
@@ -158,8 +102,19 @@ export async function fetchTelepastorsDirectoryPage(
 	const enriched = await fetchVisibleTelepastorsDirectory();
 
 	return {
-		telepastors: applyDirectoryFilters(enriched, filters),
+		telepastors: applyTelepastorDirectoryFilters(enriched, filters),
 		counts: countTelepastorDirectory(enriched),
+	};
+}
+
+export async function fetchVisibleTelepastorsDirectoryEntries(): Promise<{
+	telepastors: TelepastorDirectoryEntry[];
+	counts: TelepastorDirectoryCounts;
+}> {
+	const telepastors = await fetchVisibleTelepastorsDirectory();
+	return {
+		telepastors,
+		counts: countTelepastorDirectory(telepastors),
 	};
 }
 

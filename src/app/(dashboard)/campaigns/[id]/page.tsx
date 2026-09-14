@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ChevronLeft, FileSpreadsheet, Pencil, Share2 } from "lucide-react";
 import { requireCampaignAccess } from "@/app/actions/campaigns";
+import { CampaignCallScriptSection } from "@/components/campaigns/campaign-call-script-section";
 import { CampaignStatusBadge } from "@/components/campaigns/campaign-status-badge";
 import { ContactCards } from "@/components/campaigns/contact-cards";
 import { ContactsPagination } from "@/components/campaigns/contacts-pagination";
@@ -24,6 +25,7 @@ import { formatCampaignDate } from "@/lib/campaigns/format";
 import { canDistributeContacts } from "@/lib/auth/assignments";
 import {
   canEditCampaign,
+  canEditCampaignCallScript,
   canImportCampaignContacts,
 } from "@/lib/auth/permissions";
 import { fetchDistributionStats } from "@/lib/queries/assignments";
@@ -95,6 +97,7 @@ export default async function CampaignDetailPage({
   const canEdit = canEditCampaign(context);
   const canImport = canImportCampaignContacts(context);
   const canDistribute = canDistributeContacts(context);
+  const canEditScript = canEditCampaignCallScript(context);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -157,6 +160,14 @@ export default async function CampaignDetailPage({
           value={formatCampaignDate(campaign.event_date)}
         />
       </div>
+
+      {canEditScript ? (
+        <CampaignCallScriptSection
+          campaignId={campaign.id}
+          campaignName={campaign.name}
+          callScript={campaign.call_script}
+        />
+      ) : null}
 
       <Card>
         <CardHeader>

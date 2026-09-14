@@ -41,3 +41,21 @@ export const ACCEPTED_IMPORT_TYPES = [
 ];
 
 export const ACCEPTED_IMPORT_EXTENSIONS = [".xlsx", ".xls"];
+
+export const CLEAR_ALL_CONTACTS_CONFIRM_PHRASE = "DELETE ALL CONTACTS";
+
+export const clearAllContactsSchema = z.object({
+  confirmPhrase: z
+    .string()
+    .trim()
+    .min(1, "Type the confirmation phrase to continue"),
+  confirm: z.literal(true, { message: "Confirmation is required" }),
+});
+
+export type ClearAllContactsValues = z.infer<typeof clearAllContactsSchema>;
+
+export const campaignCallScriptSchema = z.object({
+  call_script: z.string().trim().max(20000, "Script is too long"),
+});
+
+export type CampaignCallScriptValues = z.infer<typeof campaignCallScriptSchema>;

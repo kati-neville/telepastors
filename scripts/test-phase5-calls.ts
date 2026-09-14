@@ -203,6 +203,7 @@ function testCallQueueFormDefaults() {
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
     campaign_name: "Easter",
+    campaign_call_script: null,
     attempt_count: 2,
     prior_attempts: [
       {

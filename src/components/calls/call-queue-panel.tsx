@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { recordCallAttemptAction } from "@/app/actions/calls";
 import { CallHistoryPanel } from "@/components/calls/call-history-panel";
 import { CallResponseBadge } from "@/components/calls/call-response-badge";
+import { CallScriptButton } from "@/components/calls/call-script-button";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -303,6 +304,13 @@ export function CallQueuePanel({
               WhatsApp
             </Button>
           </div>
+
+          {currentContact.campaign_call_script?.trim() ? (
+            <CallScriptButton
+              campaignName={currentContact.campaign_name}
+              script={currentContact.campaign_call_script}
+            />
+          ) : null}
 
           {whatsAppTemplates.length > 0 ? (
             <div className="space-y-2">
