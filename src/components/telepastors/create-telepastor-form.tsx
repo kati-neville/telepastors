@@ -176,7 +176,7 @@ export function CreateTelepastorForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="address">Address</Label>
+        <Label htmlFor="address">Address (optional)</Label>
         <Textarea id="address" rows={3} {...form.register("address")} />
         {form.formState.errors.address ? (
           <p className="text-sm text-destructive">

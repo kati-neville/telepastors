@@ -7,7 +7,7 @@ export const createTelepastorSchema = z
   .object({
     name: z.string().trim().min(1, "Name is required"),
     phone: z.string().trim().min(1, "Phone number is required"),
-    address: z.string().trim().min(1, "Address is required"),
+    address: z.string().trim().optional(),
     role: z.enum(["GOVERNOR", "LEADER", "TELEPASTOR"]),
     leader_id: z.string().uuid().nullable().optional(),
     governor_id: z.string().uuid().nullable().optional(),

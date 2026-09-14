@@ -189,7 +189,7 @@ export async function createTelepastorAction(
       name: parsed.data.name,
       phone: parsed.data.phone,
       phone_normalized: phoneNormalized,
-      address: parsed.data.address,
+      address: parsed.data.address || null,
       role: parsed.data.role,
       leader_id: hierarchy.leader_id,
       governor_id: hierarchy.governor_id,
