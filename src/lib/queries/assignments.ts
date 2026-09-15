@@ -19,6 +19,7 @@ export async function fetchDistributionStats(
   context: AuthorizationContext,
 ): Promise<DistributionStats> {
   const supabase = await createClient();
+  const pool = getDistributionPoolFilter(context);
 
   const [
     { count: total, error: totalError },
@@ -55,11 +56,29 @@ export async function fetchDistributionStats(
     context,
   );
 
+  let heldForOwnCalls = 0;
+
+  if (pool === "assigned_to_self") {
+    const { count: heldCount, error: heldError } = await supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .eq("current_assignee_id", context.telepastor.id)
+      .eq("held_for_own_calls", true);
+
+    if (heldError) {
+      throw new Error(heldError.message);
+    }
+
+    heldForOwnCalls = heldCount ?? 0;
+  }
+
   return {
     total: total ?? 0,
     assigned: assigned ?? 0,
     unassigned: unassigned ?? 0,
     assignedToMe: poolContacts.length,
+    heldForOwnCalls,
   };
 }
 

@@ -38,6 +38,7 @@ import {
 	canRetainContactsForCalling,
 	getAssigneeLabel,
 } from "@/lib/auth/assignments";
+import { NoAssigneesDistributionEmpty } from "@/components/assignments/no-assignees-distribution-empty";
 import type { MinistryRole, TelepastorSummary } from "@/types/domain";
 
 type EqualSplitPanelProps = {
@@ -298,16 +299,11 @@ export function EqualSplitPanel({
 
 	if (sortedAssignees.length === 0) {
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle className="text-base">
-						Distribute equally among {assigneeLabelPlural}
-					</CardTitle>
-					<CardDescription>
-						No {assigneeLabelPlural} are available in your organization.
-					</CardDescription>
-				</CardHeader>
-			</Card>
+			<NoAssigneesDistributionEmpty
+				actorRole={actorRole}
+				title={`Distribute equally among ${assigneeLabelPlural}`}
+				readyContactCount={poolContactCount}
+			/>
 		);
 	}
 
@@ -385,7 +381,8 @@ export function EqualSplitPanel({
 							disabled={isDistributing}
 						/>
 						<p className="text-xs text-muted-foreground">
-							These contacts stay assigned to you for your calls. Default is 50.
+							Default is 50. Nothing is kept or assigned until you confirm and
+							distribute.
 						</p>
 					</div>
 				) : null}

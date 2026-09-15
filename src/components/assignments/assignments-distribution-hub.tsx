@@ -62,7 +62,15 @@ function getDefaultExpandedCampaignId(
     (entry) => entry.stats.assignedToMe > 0,
   );
 
-  return readyCampaign?.campaign.id ?? null;
+  if (readyCampaign) {
+    return readyCampaign.campaign.id;
+  }
+
+  const heldCampaign = campaignData.find(
+    (entry) => entry.stats.heldForOwnCalls > 0,
+  );
+
+  return heldCampaign?.campaign.id ?? null;
 }
 
 export function AssignmentsDistributionHub({
@@ -133,6 +141,11 @@ export function AssignmentsDistributionHub({
                     {stats.assignedToMe > 0 ? (
                       <Badge variant="secondary">
                         {stats.assignedToMe} ready
+                      </Badge>
+                    ) : null}
+                    {stats.heldForOwnCalls > 0 ? (
+                      <Badge variant="outline">
+                        {stats.heldForOwnCalls} kept for calls
                       </Badge>
                     ) : null}
                   </div>

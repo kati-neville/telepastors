@@ -12,6 +12,7 @@ import {
 } from "@/components/assignments/distribution-mode-tabs";
 import { DistributionPoolFilter } from "@/components/assignments/distribution-pool-filter";
 import { EqualSplitPanel } from "@/components/assignments/equal-split-panel";
+import { NoAssigneesDistributionEmpty } from "@/components/assignments/no-assignees-distribution-empty";
 import { StatCard } from "@/components/stats/stat-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -161,11 +162,20 @@ export function DistributionPanel({
   return (
     <div className="space-y-6">
       {!embedded ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          className={
+            actorRole !== "SUPER_ADMIN"
+              ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
+              : "grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          }
+        >
           <StatCard label="Total contacts" value={stats.total} />
           <StatCard label="Assigned" value={stats.assigned} />
           <StatCard label="Unassigned" value={stats.unassigned} />
           <StatCard label="Ready to assign" value={stats.assignedToMe} />
+          {actorRole !== "SUPER_ADMIN" ? (
+            <StatCard label="Kept for my calls" value={stats.heldForOwnCalls} />
+          ) : null}
         </div>
       ) : null}
 
@@ -173,11 +183,17 @@ export function DistributionPanel({
 
       {mode === "equal" ? (
         <EqualSplitPanel
-          key={`${stats.assignedToMe}-${assignees.map((assignee) => assignee.id).join(",")}`}
+          key={`${stats.assignedToMe}-${stats.heldForOwnCalls}-${assignees.map((assignee) => assignee.id).join(",")}`}
           campaignId={campaignId}
           actorRole={actorRole}
           poolContactCount={stats.assignedToMe}
           assignees={assignees}
+        />
+      ) : assignees.length === 0 ? (
+        <NoAssigneesDistributionEmpty
+          actorRole={actorRole}
+          title="Assign contacts manually"
+          readyContactCount={stats.assignedToMe}
         />
       ) : (
         <>
