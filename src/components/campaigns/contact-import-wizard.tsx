@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
+  Download,
   FileSpreadsheet,
   Info,
   Loader2,
@@ -46,6 +47,10 @@ import {
 import { DownloadContactImportTemplateButton } from "@/components/campaigns/download-contact-import-template-button";
 import type { ColumnMappingSuggestion } from "@/lib/excel/column-mapping";
 import { CONTACT_IMPORT_TEMPLATE_COLUMNS } from "@/lib/excel/contact-import-template";
+import {
+  buildContactImportProblemRowsBuffer,
+  buildContactImportProblemRowsFilename,
+} from "@/lib/excel/contact-import-problem-rows";
 import { cn } from "@/lib/utils";
 import {
   ACCEPTED_IMPORT_EXTENSIONS,
@@ -249,6 +254,32 @@ export function ContactImportWizard({
       toast.success("Contacts imported successfully");
       router.refresh();
     });
+  };
+
+  const handleExportProblemRows = () => {
+    if (!preview || preview.problemRows.length === 0) {
+      return;
+    }
+
+    try {
+      const buffer = buildContactImportProblemRowsBuffer(preview.problemRows);
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = buildContactImportProblemRowsFilename(preview.importId);
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Exported ${preview.problemRows.length} problem row${
+          preview.problemRows.length === 1 ? "" : "s"
+        }.`,
+      );
+    } catch {
+      toast.error("Failed to export problem rows.");
+    }
   };
 
   return (
@@ -491,7 +522,18 @@ export function ContactImportWizard({
 
               {preview.problemRows.length > 0 ? (
                 <div className="space-y-3">
-                  <p className="font-medium">Rows with problems</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-medium">Rows with problems</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportProblemRows}
+                    >
+                      <Download />
+                      Export all problem rows
+                    </Button>
+                  </div>
                   <div className="overflow-hidden rounded-xl border">
                     <Table>
                       <TableHeader>
@@ -519,7 +561,8 @@ export function ContactImportWizard({
                   {preview.problemRows.length > 50 ? (
                     <p className="text-sm text-muted-foreground">
                       Showing the first 50 problem rows of{" "}
-                      {preview.problemRows.length}.
+                      {preview.problemRows.length}. Export to download all of
+                      them.
                     </p>
                   ) : null}
                 </div>
