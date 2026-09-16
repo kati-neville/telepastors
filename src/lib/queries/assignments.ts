@@ -1,4 +1,12 @@
+import { getDistributionPoolFilter } from "@/lib/auth/assignments";
+import type { AuthorizationContext } from "@/lib/auth/permissions";
+import {
+  countDistributionPoolContactsForCampaign,
+  fetchDistributionPoolContactsForCampaign,
+} from "@/lib/assignments/fetch-distribution-pool";
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { createClient } from "@/lib/supabase/server";
+import { buildContactSearchFilter } from "@/lib/utils/search";
 import type {
   Contact,
   ContactAssignmentHistoryEntry,
@@ -8,18 +16,18 @@ import type {
   TelepastorSummary,
 } from "@/types/domain";
 import type { DistributionFilterValues } from "@/lib/validations/assignments";
-import type { AuthorizationContext } from "@/lib/auth/permissions";
-import { getDistributionPoolFilter } from "@/lib/auth/assignments";
-import { fetchDistributionPoolContactsForCampaign } from "@/lib/assignments/fetch-distribution-pool";
-import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
-import { buildContactSearchFilter } from "@/lib/utils/search";
 
-export async function fetchDistributionStats(
+export type CampaignAssignmentCounts = {
+  total: number;
+  assigned: number;
+  unassigned: number;
+};
+
+/** Lean counts for campaign details — no distribution pool materialization. */
+export async function fetchCampaignAssignmentCounts(
   campaignId: string,
-  context: AuthorizationContext,
-): Promise<DistributionStats> {
+): Promise<CampaignAssignmentCounts> {
   const supabase = await createClient();
-  const pool = getDistributionPoolFilter(context);
 
   const [
     { count: total, error: totalError },
@@ -47,38 +55,75 @@ export async function fetchDistributionStats(
       totalError?.message ??
         assignedError?.message ??
         unassignedError?.message ??
-        "Failed to load assignment stats.",
+        "Failed to load assignment counts.",
     );
-  }
-
-  const poolContacts = await fetchDistributionPoolContactsForCampaign(
-    campaignId,
-    context,
-  );
-
-  let heldForOwnCalls = 0;
-
-  if (pool === "assigned_to_self") {
-    const { count: heldCount, error: heldError } = await supabase
-      .from("contacts")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("current_assignee_id", context.telepastor.id)
-      .eq("held_for_own_calls", true);
-
-    if (heldError) {
-      throw new Error(heldError.message);
-    }
-
-    heldForOwnCalls = heldCount ?? 0;
   }
 
   return {
     total: total ?? 0,
     assigned: assigned ?? 0,
     unassigned: unassigned ?? 0,
-    assignedToMe: poolContacts.length,
-    heldForOwnCalls,
+  };
+}
+
+export async function fetchDistributionStats(
+  campaignId: string,
+  context: AuthorizationContext,
+): Promise<DistributionStats> {
+  const supabase = await createClient();
+  const pool = getDistributionPoolFilter(context);
+
+  const [
+    { count: total, error: totalError },
+    { count: assigned, error: assignedError },
+    { count: unassigned, error: unassignedError },
+    assignedToMe,
+    heldResult,
+  ] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId),
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .neq("assignment_status", "UNASSIGNED"),
+    supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .eq("assignment_status", "UNASSIGNED"),
+    countDistributionPoolContactsForCampaign(campaignId, context),
+    pool === "assigned_to_self"
+      ? supabase
+          .from("contacts")
+          .select("id", { count: "exact", head: true })
+          .eq("campaign_id", campaignId)
+          .eq("current_assignee_id", context.telepastor.id)
+          .eq("held_for_own_calls", true)
+      : Promise.resolve({ count: 0, error: null }),
+  ]);
+
+  if (totalError || assignedError || unassignedError) {
+    throw new Error(
+      totalError?.message ??
+        assignedError?.message ??
+        unassignedError?.message ??
+        "Failed to load assignment stats.",
+    );
+  }
+
+  if (heldResult.error) {
+    throw new Error(heldResult.error.message);
+  }
+
+  return {
+    total: total ?? 0,
+    assigned: assigned ?? 0,
+    unassigned: unassigned ?? 0,
+    assignedToMe,
+    heldForOwnCalls: heldResult.count ?? 0,
   };
 }
 
@@ -334,7 +379,7 @@ export async function fetchDistributionSummary(
 
   const summaries = await Promise.all(
     campaigns.map(async (campaign) => {
-      const poolContacts = await fetchDistributionPoolContactsForCampaign(
+      const readyCount = await countDistributionPoolContactsForCampaign(
         campaign.id,
         context,
       );
@@ -342,7 +387,7 @@ export async function fetchDistributionSummary(
       return {
         id: campaign.id,
         name: campaign.name,
-        readyCount: poolContacts.length,
+        readyCount,
       };
     }),
   );

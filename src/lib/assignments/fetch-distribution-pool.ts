@@ -1,4 +1,5 @@
 import {
+  RETAINED_FOR_CALLING_NOTE,
   isContactReadyForDownstreamDistribution,
   type DistributionAssignmentSnapshot,
 } from "@/lib/assignments/distribution-pool";
@@ -30,6 +31,63 @@ function normalizeAssignment(
   }
 
   return assignment;
+}
+
+/**
+ * Count contacts ready in the actor's distribution pool without loading rows.
+ * Aligns with {@link fetchDistributionPoolContactsForCampaign} readiness rules.
+ */
+export async function countDistributionPoolContactsForCampaign(
+  campaignId: string,
+  context: AuthorizationContext,
+): Promise<number> {
+  const pool = getDistributionPoolFilter(context);
+  const supabase = await createClient();
+
+  if (pool === "unassigned") {
+    const { count, error } = await supabase
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .eq("assignment_status", "UNASSIGNED");
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return count ?? 0;
+  }
+
+  const actorId = context.telepastor.id;
+
+  // Assigned to actor, not held, has a current assignment from someone else
+  // (self-retain uses assigned_by = actor). Retained-note leftovers excluded.
+  const { count, error } = await supabase
+    .from("contacts")
+    .select(
+      `
+      id,
+      contact_assignments!contacts_current_assignment_id_fkey!inner (
+        assigned_by,
+        notes
+      )
+    `,
+      { count: "exact", head: true },
+    )
+    .eq("campaign_id", campaignId)
+    .eq("current_assignee_id", actorId)
+    .eq("held_for_own_calls", false)
+    .not("contact_assignments.assigned_by", "eq", actorId)
+    .or(
+      `notes.is.null,notes.not.ilike.%${RETAINED_FOR_CALLING_NOTE}%`,
+      { referencedTable: "contact_assignments" },
+    );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
 }
 
 export async function fetchDistributionPoolContactsForCampaign(

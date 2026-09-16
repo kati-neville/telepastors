@@ -28,7 +28,7 @@ import {
   canEditCampaignCallScript,
   canImportCampaignContacts,
 } from "@/lib/auth/permissions";
-import { fetchDistributionStats } from "@/lib/queries/assignments";
+import { fetchCampaignAssignmentCounts } from "@/lib/queries/assignments";
 import {
   fetchCampaignContacts,
   fetchContactImports,
@@ -92,8 +92,10 @@ export default async function CampaignDetailPage({
   const resolvedSearchParams = await searchParams;
   const { session, campaign } = await requireCampaignAccess(id);
   const context = { telepastor: session.telepastor };
-  const imports = await fetchContactImports(id);
-  const assignmentStats = await fetchDistributionStats(id, context);
+  const [imports, assignmentStats] = await Promise.all([
+    fetchContactImports(id),
+    fetchCampaignAssignmentCounts(id),
+  ]);
   const canEdit = canEditCampaign(context);
   const canImport = canImportCampaignContacts(context);
   const canDistribute = canDistributeContacts(context);
