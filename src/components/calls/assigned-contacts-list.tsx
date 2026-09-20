@@ -1,168 +1,167 @@
 "use client";
 
 import Link from "next/link";
-import { MessageSquareText, Phone, Search } from "lucide-react";
+import { MessageSquareText, Search } from "lucide-react";
 import { CallResponseBadge } from "@/components/calls/call-response-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
 } from "@/components/ui/table";
-import { buildTelLink } from "@/lib/config/calling";
 import { truncateText } from "@/lib/utils/text";
 import type { AssignedContact } from "@/types/domain";
 
 type AssignedContactsListProps = {
-  contacts: AssignedContact[];
-  search: string;
-  onSearchChange: (value: string) => void;
+	contacts: AssignedContact[];
+	search: string;
+	onSearchChange: (value: string) => void;
 };
 
+function contactQueueHref(contactId: string) {
+	return `/my-calls/queue?contactId=${contactId}`;
+}
+
 export function AssignedContactsList({
-  contacts,
-  search,
-  onSearchChange,
+	contacts,
+	search,
+	onSearchChange,
 }: AssignedContactsListProps) {
-  const query = search.trim().toLowerCase();
-  const filtered = query
-    ? contacts.filter(
-        (contact) =>
-          contact.name.toLowerCase().includes(query) ||
-          contact.phone.toLowerCase().includes(query),
-      )
-    : contacts;
+	const query = search.trim().toLowerCase();
+	const filtered = query
+		? contacts.filter(
+				contact =>
+					contact.name.toLowerCase().includes(query) ||
+					contact.phone.toLowerCase().includes(query),
+			)
+		: contacts;
 
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="assigned-contacts-search">Search contacts</Label>
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="assigned-contacts-search"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search by name or phone"
-            className="pl-9"
-          />
-        </div>
-      </div>
+	return (
+		<div className="space-y-4">
+			<div className="space-y-2">
+				<Label htmlFor="assigned-contacts-search">Search contacts</Label>
+				<div className="relative">
+					<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+					<Input
+						id="assigned-contacts-search"
+						value={search}
+						onChange={event => onSearchChange(event.target.value)}
+						placeholder="Search by name or phone"
+						className="pl-9"
+					/>
+				</div>
+			</div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-          No assigned contacts match your search.
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-3 md:hidden">
-            {filtered.map((contact) => (
-              <ContactCard key={contact.id} contact={contact} />
-            ))}
-          </div>
+			{filtered.length === 0 ? (
+				<div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+					No assigned contacts match your search.
+				</div>
+			) : (
+				<>
+					<div className="grid gap-3 md:hidden">
+						{filtered.map(contact => (
+							<ContactCard key={contact.id} contact={contact} />
+						))}
+					</div>
 
-          <div className="hidden rounded-xl border md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead>Response</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead>Attempts</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((contact) => (
-                  <TableRow key={contact.id}>
-                    <TableCell className="font-medium">{contact.name}</TableCell>
-                    <TableCell>{contact.phone}</TableCell>
-                    <TableCell>{contact.campaign_name}</TableCell>
-                    <TableCell>
-                      {contact.latest_response ? (
-                        <CallResponseBadge response={contact.latest_response} />
-                      ) : (
-                        "Pending"
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-xs text-muted-foreground">
-                      {contact.latest_notes?.trim() ? (
-                        <span className="inline-flex items-start gap-1.5">
-                          <MessageSquareText className="mt-0.5 size-4 shrink-0 text-primary" />
-                          <span>{truncateText(contact.latest_notes, 80)}</span>
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>{contact.attempt_count}</TableCell>
-                    <TableCell className="text-right">
-                      <Link
-                        href={`/my-calls/queue?contactId=${contact.id}`}
-                        className="text-sm font-medium text-primary hover:underline"
-                      >
-                        Open in queue
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </>
-      )}
-    </div>
-  );
+					<div className="hidden rounded-xl border md:block">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Name</TableHead>
+									<TableHead>Phone</TableHead>
+									<TableHead>Campaign</TableHead>
+									<TableHead>Response</TableHead>
+									<TableHead>Notes</TableHead>
+									<TableHead>Attempts</TableHead>
+									<TableHead className="text-right">Actions</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{filtered.map(contact => (
+									<TableRow key={contact.id}>
+										<TableCell className="font-medium">
+											{contact.name}
+										</TableCell>
+										<TableCell>{contact.phone}</TableCell>
+										<TableCell>{contact.campaign_name}</TableCell>
+										<TableCell>
+											{contact.latest_response ? (
+												<CallResponseBadge response={contact.latest_response} />
+											) : (
+												"Pending"
+											)}
+										</TableCell>
+										<TableCell className="max-w-xs text-muted-foreground">
+											{contact.latest_notes?.trim() ? (
+												<span className="inline-flex items-start gap-1.5">
+													<MessageSquareText className="mt-0.5 size-4 shrink-0 text-primary" />
+													<span>{truncateText(contact.latest_notes, 80)}</span>
+												</span>
+											) : (
+												"—"
+											)}
+										</TableCell>
+										<TableCell>{contact.attempt_count}</TableCell>
+										<TableCell className="text-right">
+											<Link
+												href={contactQueueHref(contact.id)}
+												className="text-sm font-medium text-primary hover:underline">
+												Open in queue
+											</Link>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+				</>
+			)}
+		</div>
+	);
 }
 
 function ContactCard({ contact }: { contact: AssignedContact }) {
-  return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium">{contact.name}</p>
-          <a
-            href={buildTelLink(contact.phone_normalized)}
-            className="mt-1 block text-lg font-medium text-primary"
-          >
-            {contact.phone}
-          </a>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {contact.campaign_name}
-          </p>
-        </div>
-        {contact.latest_response ? (
-          <CallResponseBadge response={contact.latest_response} />
-        ) : null}
-      </div>
+	return (
+		<Link
+			href={contactQueueHref(contact.id)}
+			className="block origin-center rounded-xl border bg-card p-4 shadow-sm transition-[transform,colors] duration-150 ease-out hover:bg-muted/30 active:scale-[0.97] active:bg-muted/50">
+			<div className="flex items-start justify-between gap-3">
+				<div>
+					<p className="font-medium">{contact.name}</p>
+					<p className="mt-1 text-lg font-medium text-foreground">
+						{contact.phone}
+					</p>
+					<p className="mt-2 text-xs text-muted-foreground">
+						{contact.campaign_name}
+					</p>
+				</div>
+				{contact.latest_response ? (
+					<CallResponseBadge response={contact.latest_response} />
+				) : null}
+			</div>
 
-      <div className="mt-4 flex items-center justify-between gap-2">
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">
-            {contact.attempt_count} attempt
-            {contact.attempt_count === 1 ? "" : "s"}
-          </p>
-          {contact.latest_notes?.trim() ? (
-            <p className="inline-flex items-start gap-1 text-xs text-muted-foreground">
-              <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-primary" />
-              <span>{truncateText(contact.latest_notes, 60)}</span>
-            </p>
-          ) : null}
-        </div>
-        <Link
-          href={`/my-calls/queue?contactId=${contact.id}`}
-          className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
-        >
-          <Phone className="size-4" />
-          Call
-        </Link>
-      </div>
-    </div>
-  );
+			<div className="mt-4 flex items-center justify-between gap-2">
+				<div className="space-y-1">
+					<p className="text-xs text-muted-foreground">
+						{contact.attempt_count} attempt
+						{contact.attempt_count === 1 ? "" : "s"}
+					</p>
+					{contact.latest_notes?.trim() ? (
+						<p className="inline-flex items-start gap-1 text-xs text-muted-foreground">
+							<MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-primary" />
+							<span>{truncateText(contact.latest_notes, 60)}</span>
+						</p>
+					) : null}
+				</div>
+				<span className="inline-flex min-h-10 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">
+					Log call
+				</span>
+			</div>
+		</Link>
+	);
 }

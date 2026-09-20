@@ -13,6 +13,7 @@ import {
   groupContactsByAssignee,
   type ContactStatRow,
 } from "@/lib/stats/compute";
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import type {
   FollowUpContact,
   LeadershipDashboardData,
@@ -82,51 +83,56 @@ async function fetchContactsForScope(
   assigneeIds: string[] | null,
   filters: ReportFilterValues,
 ): Promise<ContactRow[]> {
-  const supabase = await createClient();
-
-  let query = supabase
-    .from("contacts")
-    .select(
-      "id, campaign_id, latest_response, assignment_status, current_assignee_id",
-    );
-
-  if (assigneeIds && assigneeIds.length > 0) {
-    query = query.in("current_assignee_id", assigneeIds);
-  } else if (assigneeIds && assigneeIds.length === 0) {
+  if (assigneeIds && assigneeIds.length === 0) {
     return [];
   }
 
-  if (filters.campaignId) {
-    query = query.eq("campaign_id", filters.campaignId);
-  }
+  const supabase = await createClient();
 
-  if (filters.response) {
-    query = query.eq("latest_response", filters.response);
-  }
+  return fetchAllPages<ContactRow>(async (from, to) => {
+    let query = supabase
+      .from("contacts")
+      .select(
+        "id, campaign_id, latest_response, assignment_status, current_assignee_id",
+      )
+      .order("id", { ascending: true })
+      .range(from, to);
 
-  const { data, error } = await query;
+    if (assigneeIds && assigneeIds.length > 0) {
+      query = query.in("current_assignee_id", assigneeIds);
+    }
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as ContactRow[];
+    if (filters.campaignId) {
+      query = query.eq("campaign_id", filters.campaignId);
+    }
+
+    if (filters.response) {
+      query = query.eq("latest_response", filters.response);
+    }
+
+    return query;
+  });
 }
 
 async function fetchUnassignedContacts(filters: ReportFilterValues) {
   const supabase = await createClient();
 
-  let query = supabase
-    .from("contacts")
-    .select(
-      "id, campaign_id, latest_response, assignment_status, current_assignee_id",
-    )
-    .is("current_assignee_id", null);
+  return fetchAllPages<ContactRow>(async (from, to) => {
+    let query = supabase
+      .from("contacts")
+      .select(
+        "id, campaign_id, latest_response, assignment_status, current_assignee_id",
+      )
+      .is("current_assignee_id", null)
+      .order("id", { ascending: true })
+      .range(from, to);
 
-  if (filters.campaignId) {
-    query = query.eq("campaign_id", filters.campaignId);
-  }
+    if (filters.campaignId) {
+      query = query.eq("campaign_id", filters.campaignId);
+    }
 
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []) as ContactRow[];
+    return query;
+  });
 }
 
 async function countCallAttempts(
@@ -753,12 +759,17 @@ export async function fetchTelepastorRecentActivity(
 ): Promise<RecentCallActivity[]> {
   const supabase = await createClient();
 
-  const { data: contacts } = await supabase
-    .from("contacts")
-    .select("id, campaign_id")
-    .eq("current_assignee_id", telepastorId);
+  const contacts = await fetchAllPages<{ id: string; campaign_id: string }>(
+    async (from, to) =>
+      supabase
+        .from("contacts")
+        .select("id, campaign_id")
+        .eq("current_assignee_id", telepastorId)
+        .order("id", { ascending: true })
+        .range(from, to),
+  );
 
-  return fetchRecentActivity(contacts ?? [], {}, limit);
+  return fetchRecentActivity(contacts, {}, limit);
 }
 
 export function buildTeamPerformanceCsv(rows: TeamMemberStatistics[]) {

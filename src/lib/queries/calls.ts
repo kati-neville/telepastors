@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { buildContactSearchFilter } from "@/lib/utils/search";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import type {
@@ -7,8 +8,19 @@ import type {
   CallQueueContact,
   CallQueueStats,
   CallResponse,
+  Contact,
 } from "@/types/domain";
 import type { AssignedContactsFilterValues } from "@/lib/validations/calls";
+
+const CONTACT_ID_BATCH_SIZE = 200;
+
+function chunkIds(ids: string[], size: number) {
+  const batches: string[][] = [];
+  for (let index = 0; index < ids.length; index += size) {
+    batches.push(ids.slice(index, index + size));
+  }
+  return batches;
+}
 
 function emptyStats(): CallQueueStats {
   return {
@@ -63,31 +75,28 @@ async function fetchAssignedContactRows(
 ) {
   const supabase = await createClient();
 
-  let query = supabase
-    .from("contacts")
-    .select("*")
-    .eq("current_assignee_id", telepastorId)
-    .order("name", { ascending: true });
+  return fetchAllPages<Contact>(async (from, to) => {
+    let query = supabase
+      .from("contacts")
+      .select("*")
+      .eq("current_assignee_id", telepastorId)
+      .order("name", { ascending: true })
+      .range(from, to);
 
-  if (filters?.campaignId) {
-    query = query.eq("campaign_id", filters.campaignId);
-  }
-
-  const search = filters?.q?.trim();
-  if (search) {
-    const filter = buildContactSearchFilter(search);
-    if (filter) {
-      query = query.or(filter);
+    if (filters?.campaignId) {
+      query = query.eq("campaign_id", filters.campaignId);
     }
-  }
 
-  const { data, error } = await query;
+    const search = filters?.q?.trim();
+    if (search) {
+      const filter = buildContactSearchFilter(search);
+      if (filter) {
+        query = query.or(filter);
+      }
+    }
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data ?? [];
+    return query;
+  });
 }
 
 async function enrichAssignedContacts(
@@ -101,16 +110,34 @@ async function enrichAssignedContacts(
   const campaignIds = [...new Set(contacts.map((contact) => contact.campaign_id))];
   const contactIds = contacts.map((contact) => contact.id);
 
-  const [{ data: campaigns }, { data: attempts }] = await Promise.all([
-    supabase
-      .from("campaigns")
-      .select("id, name, call_script")
-      .in("id", campaignIds),
-    supabase
+  const { data: campaigns, error: campaignsError } = await supabase
+    .from("campaigns")
+    .select("id, name, call_script")
+    .in("id", campaignIds);
+
+  if (campaignsError) {
+    throw new Error(campaignsError.message);
+  }
+
+  const attemptCountMap = new Map<string, number>();
+
+  for (const batch of chunkIds(contactIds, CONTACT_ID_BATCH_SIZE)) {
+    const { data: attempts, error: attemptsError } = await supabase
       .from("call_attempts")
       .select("contact_id")
-      .in("contact_id", contactIds),
-  ]);
+      .in("contact_id", batch);
+
+    if (attemptsError) {
+      throw new Error(attemptsError.message);
+    }
+
+    for (const attempt of attempts ?? []) {
+      attemptCountMap.set(
+        attempt.contact_id,
+        (attemptCountMap.get(attempt.contact_id) ?? 0) + 1,
+      );
+    }
+  }
 
   const campaignMap = new Map(
     (campaigns ?? []).map((campaign) => [
@@ -121,14 +148,6 @@ async function enrichAssignedContacts(
       },
     ]),
   );
-
-  const attemptCountMap = new Map<string, number>();
-  for (const attempt of attempts ?? []) {
-    attemptCountMap.set(
-      attempt.contact_id,
-      (attemptCountMap.get(attempt.contact_id) ?? 0) + 1,
-    );
-  }
 
   return contacts.map((contact) => {
     const campaign = campaignMap.get(contact.campaign_id);
