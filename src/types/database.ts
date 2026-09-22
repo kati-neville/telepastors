@@ -885,6 +885,17 @@ export type Database = {
         };
         Returns: Json;
       };
+      get_leadership_dashboard_stats: {
+        Args: {
+          p_assignee_ids?: string[] | null;
+          p_scope_all?: boolean;
+          p_campaign_id?: string | null;
+          p_response?: string | null;
+          p_from?: string | null;
+          p_to?: string | null;
+        };
+        Returns: Json;
+      };
       can_record_call_attempt: {
         Args: { target_contact_id: string };
         Returns: boolean;

@@ -389,20 +389,34 @@ export async function fetchDistributionSummary(
 		return { totalReady: 0, campaigns: [] };
 	}
 
-	const summaries = await Promise.all(
-		campaigns.map(async campaign => {
-			const readyCount = await countDistributionPoolContactsForCampaign(
-				campaign.id,
-				context,
-			);
+	const CONCURRENCY = 3;
+	const summaries: DistributionCampaignSummary[] = [];
 
-			return {
-				id: campaign.id,
-				name: campaign.name,
-				readyCount,
-			};
-		}),
-	);
+	for (let index = 0; index < campaigns.length; index += CONCURRENCY) {
+		const batch = campaigns.slice(index, index + CONCURRENCY);
+		const batchResults = await Promise.all(
+			batch.map(async campaign => {
+				try {
+					const readyCount = await countDistributionPoolContactsForCampaign(
+						campaign.id,
+						context,
+					);
+					return {
+						id: campaign.id,
+						name: campaign.name,
+						readyCount,
+					};
+				} catch {
+					return {
+						id: campaign.id,
+						name: campaign.name,
+						readyCount: 0,
+					};
+				}
+			}),
+		);
+		summaries.push(...batchResults);
+	}
 
 	return {
 		totalReady: summaries.reduce(

@@ -1,8 +1,8 @@
 type SupabaseLikeError = {
-  message?: string;
+  message?: string | null;
   code?: string;
-  details?: string;
-  hint?: string;
+  details?: string | null;
+  hint?: string | null;
   status?: number;
 };
 

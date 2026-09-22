@@ -10,24 +10,33 @@ import { StatCard } from "@/components/stats/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildContactsWithNotesHref } from "@/lib/reports/contacts-with-notes-url";
 import { buildActivityHref } from "@/lib/reports/activity-url";
-import type { LeadershipDashboardData, MinistryRole } from "@/types/domain";
+import type { LeadershipDashboardShellData } from "@/lib/queries/reports";
+import type {
+  LeadershipDashboardData,
+  MinistryRole,
+  RecentCallActivity,
+  ReportFilterOptions,
+  TeamPerformanceBundle,
+} from "@/types/domain";
 import type { ReportFilterValues } from "@/lib/validations/reports";
 
-export function LeadershipDashboard({
+export function LeadershipDashboardStats({
   data,
-  role,
   filters,
   showFullReportsLink = true,
   showHeader = true,
+  recentActivity,
+  teamPerformance,
 }: {
-  data: LeadershipDashboardData;
-  role: MinistryRole;
+  data: LeadershipDashboardShellData;
   filters: ReportFilterValues;
   showFullReportsLink?: boolean;
   showHeader?: boolean;
+  recentActivity: React.ReactNode;
+  teamPerformance: React.ReactNode;
 }) {
   const contactsWithNotesHref = buildContactsWithNotesHref(filters);
-  const activityHref = buildActivityHref(filters);
+
   return (
     <div className="space-y-6">
       {showHeader ? (
@@ -78,20 +87,94 @@ export function LeadershipDashboard({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <ResponseBreakdown stats={data.stats} />
-        <RecentActivityPanel
-          activity={data.recentActivity}
-          viewAllHref={activityHref}
-        />
+        {recentActivity}
       </div>
 
-      <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-        <TeamPerformanceSection
-          bundle={data.teamPerformanceBundle}
-          role={role}
-          filters={filters}
-          filterOptions={data.filterOptions}
-        />
-      </Suspense>
+      {teamPerformance}
     </div>
+  );
+}
+
+export function RecentActivitySkeleton() {
+  return <Skeleton className="h-64 w-full rounded-xl" />;
+}
+
+export function TeamPerformanceSkeleton() {
+  return <Skeleton className="h-48 w-full rounded-xl" />;
+}
+
+export function LeadershipRecentActivity({
+  activity,
+  filters,
+}: {
+  activity: RecentCallActivity[];
+  filters: ReportFilterValues;
+}) {
+  return (
+    <RecentActivityPanel
+      activity={activity}
+      viewAllHref={buildActivityHref(filters)}
+    />
+  );
+}
+
+export function LeadershipTeamPerformance({
+  bundle,
+  role,
+  filters,
+  filterOptions,
+}: {
+  bundle: TeamPerformanceBundle;
+  role: MinistryRole;
+  filters: ReportFilterValues;
+  filterOptions: ReportFilterOptions;
+}) {
+  return (
+    <TeamPerformanceSection
+      bundle={bundle}
+      role={role}
+      filters={filters}
+      filterOptions={filterOptions}
+    />
+  );
+}
+
+/** Full dashboard used by reports (stats + extras already loaded). */
+export function LeadershipDashboard({
+  data,
+  role,
+  filters,
+  showFullReportsLink = true,
+  showHeader = true,
+}: {
+  data: LeadershipDashboardData;
+  role: MinistryRole;
+  filters: ReportFilterValues;
+  showFullReportsLink?: boolean;
+  showHeader?: boolean;
+}) {
+  return (
+    <LeadershipDashboardStats
+      data={data}
+      filters={filters}
+      showFullReportsLink={showFullReportsLink}
+      showHeader={showHeader}
+      recentActivity={
+        <LeadershipRecentActivity
+          activity={data.recentActivity}
+          filters={filters}
+        />
+      }
+      teamPerformance={
+        <Suspense fallback={<TeamPerformanceSkeleton />}>
+          <LeadershipTeamPerformance
+            bundle={data.teamPerformanceBundle}
+            role={role}
+            filters={filters}
+            filterOptions={data.filterOptions}
+          />
+        </Suspense>
+      }
+    />
   );
 }

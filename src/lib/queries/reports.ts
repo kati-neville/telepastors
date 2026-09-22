@@ -13,6 +13,7 @@ import {
   groupContactsByAssignee,
   type ContactStatRow,
 } from "@/lib/stats/compute";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import type {
   FollowUpContact,
@@ -29,6 +30,10 @@ import {
   RECENT_ACTIVITY_PAGE_LIMIT,
   RECENT_ACTIVITY_PREVIEW_LIMIT,
 } from "@/lib/reports/recent-activity-limit";
+import {
+  countContactsWithNotesFast,
+  fetchLeadershipContactStats,
+} from "@/lib/queries/leadership-dashboard-stats";
 
 type ContactRow = ContactStatRow & { id: string; campaign_id: string };
 
@@ -44,8 +49,11 @@ function chunk<T>(items: T[], size: number): T[][] {
   return batches;
 }
 
-function throwQueryError(message: string, error: { message?: string | null }) {
-  throw new Error(error.message?.trim() || message);
+function throwQueryError(
+  message: string,
+  error: { message?: string | null; code?: string; details?: string; hint?: string },
+) {
+  throw new Error(formatSupabaseError(error, message));
 }
 
 function applyAttemptDateFilters<
@@ -423,8 +431,30 @@ export async function countContactsWithNotes(
   context: AuthorizationContext,
   filters: ReportFilterValues = {},
 ): Promise<number> {
-  const contacts = await fetchContactsWithNotes(context, filters);
-  return contacts.length;
+  if (canAccessLeadershipReports(context)) {
+    const allMembers = await fetchAllMembers();
+    const scopedMembers = getReportableMembers(context, filters, allMembers);
+    return countContactsWithNotesFast(context, filters, scopedMembers);
+  }
+
+  if (canAccessMyCalls(context)) {
+    return countContactsWithNotesFast(
+      context,
+      filters,
+      [
+        {
+          id: context.telepastor.id,
+          name: context.telepastor.name,
+          role: context.telepastor.role,
+          governor_id: context.telepastor.governor_id,
+          leader_id: context.telepastor.leader_id,
+          is_active: context.telepastor.is_active,
+        },
+      ],
+    );
+  }
+
+  return 0;
 }
 
 export async function fetchReportFilterOptions(
@@ -563,55 +593,128 @@ async function buildTeamPerformanceBundle(
   };
 }
 
+export type LeadershipDashboardShellData = {
+  scopeLabel: string;
+  stats: LeadershipDashboardData["stats"];
+  activeCampaigns: number;
+  contactsWithNotesCount: number;
+  filterOptions: ReportFilterOptions;
+};
+
+export type LeadershipDashboardExtrasData = {
+  teamPerformanceBundle: TeamPerformanceBundle;
+  recentActivity: RecentCallActivity[];
+};
+
+/** Fast above-the-fold dashboard stats — no full contact materialization. */
+export async function fetchLeadershipDashboardShell(
+  context: AuthorizationContext,
+  filters: ReportFilterValues = {},
+): Promise<LeadershipDashboardShellData> {
+  const allMembers = await fetchAllMembers();
+  const scopedMembers = getReportableMembers(context, filters, allMembers);
+
+  const [contactStats, filterOptions] = await Promise.all([
+    fetchLeadershipContactStats(context, filters, scopedMembers),
+    buildFilterOptions(context, scopedMembers),
+  ]);
+
+  return {
+    scopeLabel: getReportScopeLabel(context.telepastor.role),
+    stats: contactStats.stats,
+    activeCampaigns: contactStats.activeCampaigns,
+    contactsWithNotesCount: contactStats.contactsWithNotesCount,
+    filterOptions,
+  };
+}
+
+/** Heavier dashboard sections — team performance + recent activity. */
+export async function fetchLeadershipDashboardExtras(
+  context: AuthorizationContext,
+  filters: ReportFilterValues = {},
+): Promise<LeadershipDashboardExtrasData> {
+  const bundleFilters = stripTeamPerformanceScopeFilters(filters);
+  const allMembers = await fetchAllMembers();
+  const scopedMembers = getReportableMembers(context, filters, allMembers);
+  const bundleMembers = getReportableMembers(context, bundleFilters, allMembers);
+  const assigneeIds = getScopedAssigneeIds(scopedMembers);
+  const bundleAssigneeIds = getScopedAssigneeIds(bundleMembers);
+
+  const [scopedContacts, bundleContacts] = await Promise.all([
+    (async () => {
+      let contacts = await fetchContactsForScope(assigneeIds, filters);
+      if (
+        context.telepastor.role === "SUPER_ADMIN" &&
+        !filters.governorId &&
+        !filters.leaderId &&
+        !filters.telepastorId
+      ) {
+        contacts = [...contacts, ...(await fetchUnassignedContacts(filters))];
+      }
+      return contacts;
+    })(),
+    // Team performance intentionally uses unscoped person filters.
+    (async () => {
+      let contacts = await fetchContactsForScope(bundleAssigneeIds, bundleFilters);
+      if (
+        context.telepastor.role === "SUPER_ADMIN" &&
+        !bundleFilters.governorId &&
+        !bundleFilters.leaderId &&
+        !bundleFilters.telepastorId
+      ) {
+        contacts = [
+          ...contacts,
+          ...(await fetchUnassignedContacts(bundleFilters)),
+        ];
+      }
+      return contacts;
+    })(),
+  ]);
+
+  const [attemptData, recentActivity] = await Promise.all([
+    countAttemptsByAssignee(bundleContacts, bundleFilters),
+    fetchRecentActivity(scopedContacts, filters, RECENT_ACTIVITY_PREVIEW_LIMIT),
+  ]);
+
+  const performanceMembers = bundleMembers.filter(
+    (member) =>
+      memberMatchesPerformanceView(member.role, "telepastor") ||
+      memberMatchesPerformanceView(member.role, "leader"),
+  );
+
+  const memberRows = buildTeamPerformance(
+    performanceMembers,
+    bundleContacts,
+    attemptData,
+  );
+
+  const governorRows =
+    context.telepastor.role === "SUPER_ADMIN"
+      ? buildGovernorPerformance(allMembers, bundleContacts, attemptData)
+      : [];
+
+  return {
+    teamPerformanceBundle: {
+      governorRows,
+      memberRows,
+      members: bundleMembers,
+    },
+    recentActivity,
+  };
+}
+
 export async function fetchLeadershipDashboard(
   context: AuthorizationContext,
   filters: ReportFilterValues = {},
 ): Promise<LeadershipDashboardData> {
-  const allMembers = await fetchAllMembers();
-  const scopedMembers = getReportableMembers(
-    context,
-    filters,
-    allMembers,
-  );
-  const assigneeIds = getScopedAssigneeIds(scopedMembers);
-
-  let contacts = await fetchContactsForScope(assigneeIds, filters);
-
-  if (context.telepastor.role === "SUPER_ADMIN" && !filters.governorId && !filters.leaderId && !filters.telepastorId) {
-    const unassigned = await fetchUnassignedContacts(filters);
-    contacts = [...contacts, ...unassigned];
-  }
-
-  const contactIds = contacts.map((contact) => contact.id);
-  const totalCallAttempts = await countCallAttempts(contactIds, filters);
-  const stats = computeContactStatistics(contacts, totalCallAttempts);
-
-  const activeCampaigns = await countActiveCampaignsInScope(
-    context,
-    contacts,
-    filters,
-  );
-
-  const [teamPerformanceBundle, recentActivity, contactsWithNotesCount, filterOptions] =
-    await Promise.all([
-      buildTeamPerformanceBundle(context, filters),
-      fetchRecentActivity(
-        contacts,
-        filters,
-        RECENT_ACTIVITY_PREVIEW_LIMIT,
-      ),
-      countContactsWithNotes(context, filters),
-      buildFilterOptions(context, scopedMembers),
-    ]);
+  const [shell, extras] = await Promise.all([
+    fetchLeadershipDashboardShell(context, filters),
+    fetchLeadershipDashboardExtras(context, filters),
+  ]);
 
   return {
-    scopeLabel: getReportScopeLabel(context.telepastor.role),
-    stats,
-    activeCampaigns,
-    contactsWithNotesCount,
-    teamPerformanceBundle,
-    recentActivity,
-    filterOptions,
+    ...shell,
+    ...extras,
   };
 }
 
