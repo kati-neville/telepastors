@@ -1,17 +1,29 @@
 import { Suspense } from "react";
 import { requireAssignmentsAccess } from "@/app/actions/assignments";
 import { AssignmentsDistributionHub } from "@/components/assignments/assignments-distribution-hub";
+import type { CampaignDistributionData } from "@/components/assignments/assignments-distribution-hub";
 import { getAssigneeLabel } from "@/lib/auth/assignments";
+import type { AuthorizationContext } from "@/lib/auth/permissions";
 import {
   fetchAssignableMembers,
   fetchCampaignsForDistribution,
-  fetchDistributionContacts,
   fetchDistributionStats,
 } from "@/lib/queries/assignments";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Campaign, DistributionStats } from "@/types/domain";
 
 type AssignmentsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const STATS_CONCURRENCY = 3;
+
+const EMPTY_STATS: DistributionStats = {
+  total: 0,
+  assigned: 0,
+  unassigned: 0,
+  assignedToMe: 0,
+  heldForOwnCalls: 0,
 };
 
 function getParam(
@@ -31,6 +43,40 @@ function AssignmentsDistributionSkeleton() {
   );
 }
 
+async function loadCampaignDistributionData(
+  campaigns: Campaign[],
+  context: AuthorizationContext,
+): Promise<CampaignDistributionData[]> {
+  const results: CampaignDistributionData[] = [];
+
+  for (let index = 0; index < campaigns.length; index += STATS_CONCURRENCY) {
+    const batch = campaigns.slice(index, index + STATS_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map(async (campaign) => {
+        try {
+          const stats = await fetchDistributionStats(campaign.id, context);
+          return { campaign, stats } satisfies CampaignDistributionData;
+        } catch (error) {
+          const message =
+            error instanceof Error && error.message.trim()
+              ? error.message
+              : "Failed to load assignment stats.";
+
+          return {
+            campaign,
+            stats: EMPTY_STATS,
+            statsError: message,
+          } satisfies CampaignDistributionData;
+        }
+      }),
+    );
+
+    results.push(...batchResults);
+  }
+
+  return results;
+}
+
 async function AssignmentsDistributionContent({
   initialCampaignId,
 }: {
@@ -43,15 +89,9 @@ async function AssignmentsDistributionContent({
   ]);
   const assigneeLabel = getAssigneeLabel(session.telepastor.role);
 
-  const campaignData = await Promise.all(
-    campaigns.map(async (campaign) => ({
-      campaign,
-      stats: await fetchDistributionStats(campaign.id, context),
-      contacts: await fetchDistributionContacts(campaign.id, context, {
-        pool: "all",
-      }),
-    })),
-  );
+  // Stats-only hub load — contacts are fetched when a campaign is opened for
+  // manual assignment (avoids N× full contact pagination timeouts).
+  const campaignData = await loadCampaignDistributionData(campaigns, context);
 
   const focusedCampaign = initialCampaignId
     ? campaigns.find((campaign) => campaign.id === initialCampaignId)

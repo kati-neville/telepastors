@@ -27,6 +27,7 @@ import type { AuthorizationContext } from "@/lib/auth/permissions";
 import {
   fetchAssigneeById,
   fetchContactsByIds,
+  fetchDistributionContacts,
   fetchDistributionPoolContactIds,
 } from "@/lib/queries/assignments";
 import { fetchCampaignById } from "@/lib/queries/campaigns";
@@ -37,6 +38,7 @@ import {
   bulkDistributionChunkSchema,
   finalizeBulkDistributionSchema,
 } from "@/lib/validations/assignments";
+import type { ContactWithAssignee } from "@/types/domain";
 
 type ActionResult<T = undefined> =
   | { success: true; data?: T }
@@ -906,4 +908,29 @@ export async function requireAssignmentsAccess() {
   }
 
   return { session, context };
+}
+
+export async function loadDistributionContactsAction(
+  campaignId: string,
+): Promise<ActionResult<ContactWithAssignee[]>> {
+  if (!campaignId.trim()) {
+    return { success: false, error: "Campaign is required." };
+  }
+
+  const { context } = await requireAssignmentsAccess();
+
+  try {
+    const contacts = await fetchDistributionContacts(campaignId, context, {
+      pool: "all",
+    });
+    return { success: true, data: contacts };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Failed to load contacts.",
+    };
+  }
 }

@@ -17,7 +17,6 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   Campaign,
-  ContactWithAssignee,
   DistributionStats,
   MinistryRole,
   TelepastorSummary,
@@ -26,7 +25,7 @@ import type {
 export type CampaignDistributionData = {
   campaign: Campaign;
   stats: DistributionStats;
-  contacts: ContactWithAssignee[];
+  statsError?: string;
 };
 
 type AssignmentsDistributionHubProps = {
@@ -122,7 +121,7 @@ export function AssignmentsDistributionHub({
 
   return (
     <div className="grid gap-4">
-      {campaignData.map(({ campaign, stats, contacts }) => {
+      {campaignData.map(({ campaign, stats, statsError }) => {
         const isExpanded = singleCampaign || expandedCampaignId === campaign.id;
 
         return (
@@ -138,12 +137,15 @@ export function AssignmentsDistributionHub({
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle className="text-base">{campaign.name}</CardTitle>
                     <CampaignStatusBadge status={campaign.status} />
-                    {stats.assignedToMe > 0 ? (
+                    {statsError ? (
+                      <Badge variant="destructive">Stats unavailable</Badge>
+                    ) : null}
+                    {!statsError && stats.assignedToMe > 0 ? (
                       <Badge variant="secondary">
                         {stats.assignedToMe} ready
                       </Badge>
                     ) : null}
-                    {stats.heldForOwnCalls > 0 ? (
+                    {!statsError && stats.heldForOwnCalls > 0 ? (
                       <Badge variant="outline">
                         {stats.heldForOwnCalls} kept for calls
                       </Badge>
@@ -179,15 +181,31 @@ export function AssignmentsDistributionHub({
 
             {isExpanded ? (
               <CardContent className="space-y-4 border-t pt-6">
-                <DistributionPanel
-                  embedded
-                  campaignId={campaign.id}
-                  campaignName={campaign.name}
-                  actorRole={actorRole}
-                  stats={stats}
-                  contacts={contacts}
-                  assignees={assignees}
-                />
+                {statsError ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-6 text-sm">
+                    <p className="font-medium text-destructive">
+                      Could not load distribution stats for this campaign.
+                    </p>
+                    <p className="mt-2 text-muted-foreground">{statsError}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => router.refresh()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <DistributionPanel
+                    embedded
+                    campaignId={campaign.id}
+                    campaignName={campaign.name}
+                    actorRole={actorRole}
+                    stats={stats}
+                    assignees={assignees}
+                  />
+                )}
               </CardContent>
             ) : null}
           </Card>

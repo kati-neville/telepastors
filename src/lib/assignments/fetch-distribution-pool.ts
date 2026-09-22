@@ -5,6 +5,7 @@ import {
 } from "@/lib/assignments/distribution-pool";
 import { getDistributionPoolFilter } from "@/lib/auth/assignments";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,7 +53,9 @@ export async function countDistributionPoolContactsForCampaign(
       .eq("assignment_status", "UNASSIGNED");
 
     if (error) {
-      throw new Error(error.message);
+      throw new Error(
+        formatSupabaseError(error, "Failed to count unassigned pool contacts."),
+      );
     }
 
     return count ?? 0;
@@ -84,7 +87,9 @@ export async function countDistributionPoolContactsForCampaign(
     );
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(
+      formatSupabaseError(error, "Failed to count distribution pool contacts."),
+    );
   }
 
   return count ?? 0;

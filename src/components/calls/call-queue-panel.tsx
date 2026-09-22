@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -82,6 +82,7 @@ export function CallQueuePanel({
   const [notes, setNotes] = useState(initialForm.notes);
   const [showNotesPrompt, setShowNotesPrompt] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isLoadingNext, setIsLoadingNext] = useState(false);
   const [lastSavedContactName, setLastSavedContactName] = useState("");
 
   const templateItems = useMemo(
@@ -94,12 +95,27 @@ export function CallQueuePanel({
   );
 
   const currentContact = initialContact;
+  const isAdvancing = isPending || isLoadingNext;
+
+  useEffect(() => {
+    if (!initialContact) {
+      setIsLoadingNext(false);
+      return;
+    }
+
+    const defaults = getCallQueueFormDefaults(initialContact);
+    setSelectedResponse(defaults.response);
+    setNotes(defaults.notes);
+    setShowNotesPrompt(false);
+    setIsLoadingNext(false);
+    setShowSuccess(false);
+  }, [initialContact?.id]);
 
   const completedCount = stats.completed;
   const totalCount = stats.assigned;
 
   const handleSkip = () => {
-    if (!currentContact) return;
+    if (!currentContact || isAdvancing) return;
 
     const nextSkipped = [...skippedIds, currentContact.id];
     setSkippedIds(nextSkipped);
@@ -113,16 +129,18 @@ export function CallQueuePanel({
 
     setSelectedResponse(null);
     setNotes("");
+    setIsLoadingNext(true);
 
     if (next) {
       router.replace(`/my-calls/queue?contactId=${next.id}`);
     } else {
       router.replace("/my-calls/queue");
     }
+    router.refresh();
   };
 
   const handleSaveAndNext = (skipNotesPrompt = false) => {
-    if (!currentContact) return;
+    if (!currentContact || isAdvancing) return;
 
     if (!selectedResponse) {
       toast.error("Select how the call went.");
@@ -158,23 +176,20 @@ export function CallQueuePanel({
 
       setLastSavedContactName(currentContact.name);
       setShowSuccess(true);
+      setIsLoadingNext(true);
       setStats(result.data!.stats);
+      setSelectedResponse(null);
+      setNotes("");
 
       const nextContactId = result.data?.nextContactId;
 
-      setTimeout(() => {
-        setShowSuccess(false);
-        setSelectedResponse(null);
-        setNotes("");
+      if (nextContactId) {
+        router.replace(`/my-calls/queue?contactId=${nextContactId}`);
+      } else {
+        router.replace("/my-calls/queue");
+      }
 
-        if (nextContactId) {
-          router.replace(`/my-calls/queue?contactId=${nextContactId}`);
-        } else {
-          router.replace("/my-calls/queue");
-        }
-
-        router.refresh();
-      }, 600);
+      router.refresh();
     });
   };
 
@@ -240,14 +255,40 @@ export function CallQueuePanel({
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div
-          key={currentContact.id}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.18 }}
-          className="space-y-5"
-        >
+        {isAdvancing ? (
+          <motion.div
+            key="advancing"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="flex min-h-[28rem] flex-col items-center justify-center gap-4 rounded-2xl border bg-card px-6 py-16 text-center shadow-sm"
+          >
+            <Loader2 className="size-10 animate-spin text-primary" />
+            <div className="space-y-2">
+              <p className="font-heading text-xl font-semibold tracking-tight">
+                {isLoadingNext
+                  ? showSuccess
+                    ? "Saved — loading next contact"
+                    : "Loading next contact"
+                  : "Saving response"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isLoadingNext && lastSavedContactName
+                  ? `Response recorded for ${lastSavedContactName}.`
+                  : "Please wait a moment."}
+              </p>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={currentContact.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-5"
+          >
           <div className="rounded-2xl border bg-card p-5 shadow-sm">
             <p className="text-sm text-muted-foreground">
               {currentContact.campaign_name}
@@ -354,7 +395,7 @@ export function CallQueuePanel({
                   type="button"
                   variant={selectedResponse === response ? "default" : "outline"}
                   className="min-h-12 justify-center text-sm"
-                  disabled={isPending}
+                  disabled={isAdvancing}
                   onClick={() => setSelectedResponse(response)}
                 >
                   {CALL_RESPONSE_SHORT_LABELS[response]}
@@ -376,7 +417,7 @@ export function CallQueuePanel({
               }}
               placeholder="Optional details (required for Other)"
               rows={3}
-              disabled={isPending}
+              disabled={isAdvancing}
             />
             <div className="flex flex-wrap gap-2">
               {CALL_NOTE_SUGGESTIONS.map((suggestion) => (
@@ -385,7 +426,7 @@ export function CallQueuePanel({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isPending}
+                  disabled={isAdvancing}
                   onClick={() => {
                     setNotes((current) =>
                       current.trim()
@@ -409,7 +450,7 @@ export function CallQueuePanel({
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={isPending}
+                    disabled={isAdvancing}
                     onClick={() => setShowNotesPrompt(false)}
                   >
                     Add note
@@ -417,7 +458,7 @@ export function CallQueuePanel({
                   <Button
                     type="button"
                     size="sm"
-                    disabled={isPending}
+                    disabled={isAdvancing}
                     onClick={() => handleSaveAndNext(true)}
                   >
                     Save without note
@@ -426,20 +467,8 @@ export function CallQueuePanel({
               </div>
             ) : null}
           </div>
-        </motion.div>
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showSuccess ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-x-4 bottom-28 z-50 mx-auto max-w-lg rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-center text-sm font-medium text-primary shadow-lg"
-          >
-            Saved response for {lastSavedContactName}
           </motion.div>
-        ) : null}
+        )}
       </AnimatePresence>
 
       <div className="fixed inset-x-0 bottom-16 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur md:bottom-0 md:left-64">
@@ -448,7 +477,7 @@ export function CallQueuePanel({
             type="button"
             variant="outline"
             className="min-h-12 flex-1"
-            disabled={isPending}
+            disabled={isAdvancing}
             onClick={handleSkip}
           >
             <SkipForward />
@@ -457,13 +486,13 @@ export function CallQueuePanel({
           <Button
             type="button"
             className="min-h-12 flex-[2] text-base"
-            disabled={isPending || !selectedResponse}
+            disabled={isAdvancing || !selectedResponse}
             onClick={() => handleSaveAndNext()}
           >
-            {isPending ? (
+            {isAdvancing ? (
               <>
                 <Loader2 className="animate-spin" />
-                Saving...
+                {isLoadingNext ? "Loading..." : "Saving..."}
               </>
             ) : (
               "Save & Next"

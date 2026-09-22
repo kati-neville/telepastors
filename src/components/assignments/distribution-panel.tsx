@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
-import { assignContactsAction } from "@/app/actions/assignments";
+import {
+  assignContactsAction,
+  loadDistributionContactsAction,
+} from "@/app/actions/assignments";
 import { AssignmentStatusBadge } from "@/components/assignments/assignment-status-badge";
 import {
   DistributionModeTabs,
@@ -57,7 +60,6 @@ type DistributionPanelProps = {
   campaignName: string;
   actorRole: MinistryRole;
   stats: DistributionStats;
-  contacts: ContactWithAssignee[];
   assignees: TelepastorSummary[];
   initialSearch?: string;
   initialPool?: DistributionFilterValues["pool"];
@@ -69,7 +71,6 @@ export function DistributionPanel({
   campaignName,
   actorRole,
   stats,
-  contacts,
   assignees,
   initialSearch = "",
   initialPool = "all",
@@ -81,6 +82,10 @@ export function DistributionPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [assigneeId, setAssigneeId] = useState("");
   const [search, setSearch] = useState(initialSearch);
+  const [contacts, setContacts] = useState<ContactWithAssignee[] | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+  const [contactsRevision, setContactsRevision] = useState(0);
   const assigneeLabel = getAssigneeLabel(actorRole);
   const assigneeItems = useMemo(
     () =>
@@ -91,11 +96,46 @@ export function DistributionPanel({
     [assignees],
   );
 
-  const filteredContacts = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return contacts;
+  const statsKey = `${stats.total}-${stats.assigned}-${stats.unassigned}-${stats.assignedToMe}-${stats.heldForOwnCalls}`;
 
-    return contacts.filter(
+  useEffect(() => {
+    if (mode !== "manual") {
+      return;
+    }
+
+    let cancelled = false;
+
+    setContactsLoading(true);
+    setContactsError(null);
+
+    void loadDistributionContactsAction(campaignId).then((result) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (!result.success) {
+        setContacts([]);
+        setContactsError(result.error);
+        setContactsLoading(false);
+        return;
+      }
+
+      setContacts(result.data ?? []);
+      setContactsError(null);
+      setContactsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, campaignId, statsKey, contactsRevision]);
+
+  const filteredContacts = useMemo(() => {
+    const list = contacts ?? [];
+    const query = search.trim().toLowerCase();
+    if (!query) return list;
+
+    return list.filter(
       (contact) =>
         contact.name.toLowerCase().includes(query) ||
         contact.phone.toLowerCase().includes(query),
@@ -155,6 +195,7 @@ export function DistributionPanel({
       );
       setSelectedIds(new Set());
       setAssigneeId("");
+      setContactsRevision((current) => current + 1);
       router.refresh();
     });
   };
@@ -218,6 +259,7 @@ export function DistributionPanel({
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search by name or phone"
+                    disabled={contactsLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -242,7 +284,12 @@ export function DistributionPanel({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" onClick={toggleAllVisible}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={toggleAllVisible}
+                  disabled={contactsLoading || filteredContacts.length === 0}
+                >
                   {allVisibleSelected ? "Clear selection" : "Select all visible"}
                 </Button>
 
@@ -287,7 +334,25 @@ export function DistributionPanel({
             </CardContent>
           </Card>
 
-          {filteredContacts.length === 0 ? (
+          {contactsLoading ? (
+            <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border px-6 py-10 text-sm text-muted-foreground">
+              <Loader2 className="size-6 animate-spin text-primary" />
+              Loading contacts…
+            </div>
+          ) : contactsError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center text-sm">
+              <p className="font-medium text-destructive">Could not load contacts.</p>
+              <p className="mt-2 text-muted-foreground">{contactsError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4"
+                onClick={() => setContactsRevision((current) => current + 1)}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : filteredContacts.length === 0 ? (
             <div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
               No contacts available for assignment with the current filters.
             </div>
