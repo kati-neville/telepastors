@@ -86,13 +86,22 @@ export async function countDistributionPoolContactsForCampaign(
       { referencedTable: "contact_assignments" },
     );
 
-  if (error) {
-    throw new Error(
-      formatSupabaseError(error, "Failed to count distribution pool contacts."),
-    );
+  if (!error) {
+    return count ?? 0;
   }
 
-  return count ?? 0;
+  // HEAD + join counts often time out with an empty message under RLS.
+  // Fall back to the same row fetch used for distribution itself.
+  console.error(
+    "[assignments] pool HEAD count failed; falling back to scan",
+    formatSupabaseError(error, "empty HEAD error"),
+  );
+
+  const poolContacts = await fetchDistributionPoolContactsForCampaign(
+    campaignId,
+    context,
+  );
+  return poolContacts.length;
 }
 
 export async function fetchDistributionPoolContactsForCampaign(

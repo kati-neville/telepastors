@@ -74,12 +74,62 @@ export async function fetchDistributionStats(
 	const supabase = await createClient();
 	const pool = getDistributionPoolFilter(context);
 
+	// Governors/leaders only need their own pool counts. Campaign-wide HEAD counts
+	// (total/assigned/unassigned) scan the whole campaign under RLS and time out
+	// on large campaigns (~15k+) with empty PostgREST errors.
+	if (pool === "assigned_to_self") {
+		const actorId = context.telepastor.id;
+
+		const [assignedToMe, heldResult, assignedToActorResult] =
+			await Promise.all([
+				countDistributionPoolContactsForCampaign(campaignId, context),
+				supabase
+					.from("contacts")
+					.select("id", { count: "exact", head: true })
+					.eq("campaign_id", campaignId)
+					.eq("current_assignee_id", actorId)
+					.eq("held_for_own_calls", true),
+				supabase
+					.from("contacts")
+					.select("id", { count: "exact", head: true })
+					.eq("campaign_id", campaignId)
+					.eq("current_assignee_id", actorId),
+			]);
+
+		if (heldResult.error) {
+			throw new Error(
+				formatSupabaseError(
+					heldResult.error,
+					"Failed to load held-for-calls count.",
+				),
+			);
+		}
+
+		if (assignedToActorResult.error) {
+			throw new Error(
+				formatSupabaseError(
+					assignedToActorResult.error,
+					"Failed to load assignment stats.",
+				),
+			);
+		}
+
+		const assignedToActor = assignedToActorResult.count ?? 0;
+
+		return {
+			total: assignedToActor,
+			assigned: assignedToActor,
+			unassigned: 0,
+			assignedToMe,
+			heldForOwnCalls: heldResult.count ?? 0,
+		};
+	}
+
 	const [
 		{ count: total, error: totalError },
 		{ count: assigned, error: assignedError },
 		{ count: unassigned, error: unassignedError },
 		assignedToMe,
-		heldResult,
 	] = await Promise.all([
 		supabase
 			.from("contacts")
@@ -96,14 +146,6 @@ export async function fetchDistributionStats(
 			.eq("campaign_id", campaignId)
 			.eq("assignment_status", "UNASSIGNED"),
 		countDistributionPoolContactsForCampaign(campaignId, context),
-		pool === "assigned_to_self"
-			? supabase
-					.from("contacts")
-					.select("id", { count: "exact", head: true })
-					.eq("campaign_id", campaignId)
-					.eq("current_assignee_id", context.telepastor.id)
-					.eq("held_for_own_calls", true)
-			: Promise.resolve({ count: 0, error: null }),
 	]);
 
 	if (totalError || assignedError || unassignedError) {
@@ -115,21 +157,12 @@ export async function fetchDistributionStats(
 		);
 	}
 
-	if (heldResult.error) {
-		throw new Error(
-			formatSupabaseError(
-				heldResult.error,
-				"Failed to load held-for-calls count.",
-			),
-		);
-	}
-
 	return {
 		total: total ?? 0,
 		assigned: assigned ?? 0,
 		unassigned: unassigned ?? 0,
 		assignedToMe,
-		heldForOwnCalls: heldResult.count ?? 0,
+		heldForOwnCalls: 0,
 	};
 }
 
