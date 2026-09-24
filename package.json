@@ -18,6 +18,7 @@
     "sync:auth-phones": "tsx --env-file=.env.local scripts/sync-auth-phones.ts",
     "reset:telepastor-password": "tsx --env-file=.env.local scripts/reset-telepastor-password.ts",
     "set:auth-password-policy": "tsx --env-file=.env.local scripts/set-auth-password-policy.ts",
+    "export:campaign-contacts": "tsx --env-file=.env.local scripts/export-campaign-contacts.ts",
     "test:logout": "tsx --env-file=.env.local scripts/test-logout-flow.ts",
     "test:phase3": "tsx scripts/test-phase3-import.ts",
     "test:phase4": "tsx scripts/test-phase4-assignments.ts",

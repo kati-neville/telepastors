@@ -12,6 +12,7 @@ export const AUDIT_ACTIONS = {
   CAMPAIGN_UPDATED: "campaign.updated",
   CAMPAIGN_CALL_SCRIPT_UPDATED: "campaign.call_script_updated",
   CONTACTS_IMPORTED: "contacts.imported",
+  CONTACTS_EXPORTED: "contacts.exported",
   CONTACTS_CLEARED: "contacts.cleared",
   CONTACTS_ASSIGNED: "contacts.assigned",
   CONTACTS_REASSIGNED: "contacts.reassigned",

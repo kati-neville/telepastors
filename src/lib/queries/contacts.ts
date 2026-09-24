@@ -1,6 +1,8 @@
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { createClient } from "@/lib/supabase/server";
 import { buildContactSearchFilter } from "@/lib/utils/search";
+import { loadCampaignContactsForExport } from "@/lib/contacts/load-campaign-contacts-export";
+import type { CampaignContactExportRow } from "@/lib/excel/contact-export";
 import type { Contact, ContactImportSummary, ContactWithAssignee, MinistryRole } from "@/types/domain";
 import type { ContactsFilterValues } from "@/lib/validations/campaigns";
 
@@ -165,4 +167,12 @@ export async function fetchContactImportById(importId: string) {
   }
 
   return data;
+}
+
+/** Read-only wrapper for server components/actions. Does not mutate data. */
+export async function fetchCampaignContactsForExport(
+  campaignId: string,
+): Promise<CampaignContactExportRow[]> {
+  const supabase = await createClient();
+  return loadCampaignContactsForExport(supabase, campaignId);
 }

@@ -11,6 +11,7 @@ import {
   ContactsEmptyState,
   ContactsTable,
 } from "@/components/campaigns/contacts-table";
+import { ExportCampaignContactsButton } from "@/components/campaigns/export-campaign-contacts-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -139,6 +140,9 @@ export default async function CampaignDetailPage({
               <FileSpreadsheet />
               Import contacts
             </Button>
+          ) : null}
+          {canImport ? (
+            <ExportCampaignContactsButton campaignId={campaign.id} />
           ) : null}
           {canEdit ? (
             <Button

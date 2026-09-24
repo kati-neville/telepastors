@@ -16,6 +16,10 @@ import { requireAuthSession } from "@/lib/auth/session";
 import { toActionErrorMessage } from "@/lib/errors/client-message";
 import { validateColumnMapping } from "@/lib/excel/column-mapping";
 import {
+  buildCampaignContactsExportBuffer,
+  buildCampaignContactsExportFilename,
+} from "@/lib/excel/contact-export";
+import {
   buildContactImportTemplateBuffer,
   CONTACT_IMPORT_TEMPLATE_FILENAME,
 } from "@/lib/excel/contact-import-template";
@@ -27,6 +31,7 @@ import {
 } from "@/lib/excel/parse-contacts";
 import { fetchCampaignById } from "@/lib/queries/campaigns";
 import {
+  fetchCampaignContactsForExport,
   fetchContactImportById,
   fetchExistingNormalizedPhones,
 } from "@/lib/queries/contacts";
@@ -600,6 +605,64 @@ export async function downloadContactImportTemplateAction(): Promise<
       filename: CONTACT_IMPORT_TEMPLATE_FILENAME,
     },
   };
+}
+
+/** Export campaign contacts to Excel. Read-only — never deletes contacts. */
+export async function exportCampaignContactsAction(
+  campaignId: string,
+): Promise<ActionResult<{ base64: string; filename: string; rowCount: number }>> {
+  const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
+
+  if (!canImportCampaignContacts(context)) {
+    return {
+      success: false,
+      error: "Only Super Admins can export campaign contacts.",
+    };
+  }
+
+  if (!campaignId.trim()) {
+    return { success: false, error: "Campaign is required." };
+  }
+
+  const campaign = await fetchCampaignById(campaignId);
+  if (!campaign) {
+    return { success: false, error: "Campaign not found." };
+  }
+
+  try {
+    const rows = await fetchCampaignContactsForExport(campaignId);
+    const buffer = buildCampaignContactsExportBuffer(rows);
+    const filename = buildCampaignContactsExportFilename(campaign.name);
+
+    await recordAuditEvent({
+      actorId: session.telepastor.id,
+      action: AUDIT_ACTIONS.CONTACTS_EXPORTED,
+      entityType: "campaign",
+      entityId: campaignId,
+      metadata: {
+        rowCount: rows.length,
+        filename,
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        base64: Buffer.from(buffer).toString("base64"),
+        filename,
+        rowCount: rows.length,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: toActionErrorMessage(
+        error,
+        "Failed to export campaign contacts.",
+      ),
+    };
+  }
 }
 
 const ALL_ROWS_FILTER_ID = "00000000-0000-0000-0000-000000000000";
