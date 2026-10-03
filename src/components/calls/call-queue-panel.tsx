@@ -26,10 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  getCallQueueFormDefaults,
-  shouldSuggestCallNotes,
-} from "@/lib/calls/form-defaults";
+import { getCallQueueFormDefaults } from "@/lib/calls/form-defaults";
 import {
   buildTelLink,
   buildWhatsAppLink,
@@ -44,14 +41,7 @@ import type {
   CallResponse,
   WhatsAppMessageTemplate,
 } from "@/types/domain";
-
-const RESPONSE_OPTIONS: CallResponse[] = [
-  "COMING",
-  "NOT_COMING",
-  "UNREACHABLE",
-  "WRONG_NUMBER",
-  "OTHER",
-];
+import { CALL_RESPONSES } from "@/types/domain";
 
 type CallQueuePanelProps = {
   initialContact: CallQueueContact | null;
@@ -80,7 +70,6 @@ export function CallQueuePanel({
     initialForm.response,
   );
   const [notes, setNotes] = useState(initialForm.notes);
-  const [showNotesPrompt, setShowNotesPrompt] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isLoadingNext, setIsLoadingNext] = useState(false);
   const [lastSavedContactName, setLastSavedContactName] = useState("");
@@ -106,7 +95,6 @@ export function CallQueuePanel({
     const defaults = getCallQueueFormDefaults(initialContact);
     setSelectedResponse(defaults.response);
     setNotes(defaults.notes);
-    setShowNotesPrompt(false);
     setIsLoadingNext(false);
     setShowSuccess(false);
   }, [initialContact?.id]);
@@ -139,7 +127,7 @@ export function CallQueuePanel({
     router.refresh();
   };
 
-  const handleSaveAndNext = (skipNotesPrompt = false) => {
+  const handleSaveAndNext = () => {
     if (!currentContact || isAdvancing) return;
 
     if (!selectedResponse) {
@@ -151,16 +139,6 @@ export function CallQueuePanel({
       toast.error("Please add notes when selecting Other.");
       return;
     }
-
-    if (
-      !skipNotesPrompt &&
-      shouldSuggestCallNotes(selectedResponse, notes)
-    ) {
-      setShowNotesPrompt(true);
-      return;
-    }
-
-    setShowNotesPrompt(false);
 
     startTransition(async () => {
       const result = await recordCallAttemptAction({
@@ -238,7 +216,7 @@ export function CallQueuePanel({
   );
 
   return (
-    <div className="mx-auto flex max-w-lg flex-col gap-5 pb-28">
+    <div className="mx-auto flex max-w-lg flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <Button
           variant="ghost"
@@ -389,7 +367,7 @@ export function CallQueuePanel({
           <div className="space-y-3">
             <p className="text-sm font-medium">How did the call go?</p>
             <div className="grid grid-cols-2 gap-2">
-              {RESPONSE_OPTIONS.map((response) => (
+              {CALL_RESPONSES.map((response) => (
                 <Button
                   key={response}
                   type="button"
@@ -411,9 +389,6 @@ export function CallQueuePanel({
               value={notes}
               onChange={(event) => {
                 setNotes(event.target.value);
-                if (showNotesPrompt) {
-                  setShowNotesPrompt(false);
-                }
               }}
               placeholder="Optional details (required for Other)"
               rows={3}
@@ -433,73 +408,44 @@ export function CallQueuePanel({
                         ? `${current.trim()}\n${suggestion}`
                         : suggestion,
                     );
-                    setShowNotesPrompt(false);
                   }}
                 >
                   {suggestion}
                 </Button>
               ))}
             </div>
-            {showNotesPrompt ? (
-              <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-                <p>
-                  Adding a note helps pastors follow up on this contact.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={isAdvancing}
-                    onClick={() => setShowNotesPrompt(false)}
-                  >
-                    Add note
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={isAdvancing}
-                    onClick={() => handleSaveAndNext(true)}
-                  >
-                    Save without note
-                  </Button>
-                </div>
-              </div>
-            ) : null}
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12 flex-1"
+              disabled={isAdvancing}
+              onClick={handleSkip}
+            >
+              <SkipForward />
+              Skip
+            </Button>
+            <Button
+              type="button"
+              className="min-h-12 flex-[2] text-base"
+              disabled={isAdvancing || !selectedResponse}
+              onClick={handleSaveAndNext}
+            >
+              {isAdvancing ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  {isLoadingNext ? "Loading..." : "Saving..."}
+                </>
+              ) : (
+                "Save & Next"
+              )}
+            </Button>
           </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <div className="fixed inset-x-0 bottom-16 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur md:bottom-0 md:left-64">
-        <div className="mx-auto flex max-w-lg gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 flex-1"
-            disabled={isAdvancing}
-            onClick={handleSkip}
-          >
-            <SkipForward />
-            Skip
-          </Button>
-          <Button
-            type="button"
-            className="min-h-12 flex-[2] text-base"
-            disabled={isAdvancing || !selectedResponse}
-            onClick={() => handleSaveAndNext()}
-          >
-            {isAdvancing ? (
-              <>
-                <Loader2 className="animate-spin" />
-                {isLoadingNext ? "Loading..." : "Saving..."}
-              </>
-            ) : (
-              "Save & Next"
-            )}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

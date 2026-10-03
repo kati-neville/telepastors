@@ -30,6 +30,7 @@ function emptyStats(): CallQueueStats {
     coming: 0,
     notComing: 0,
     unreachable: 0,
+    switchedOff: 0,
     wrongNumber: 0,
     other: 0,
   };
@@ -56,6 +57,9 @@ function buildStats(contacts: AssignedContact[]): CallQueueStats {
         break;
       case "UNREACHABLE":
         stats.unreachable += 1;
+        break;
+      case "SWITCHED_OFF":
+        stats.switchedOff += 1;
         break;
       case "WRONG_NUMBER":
         stats.wrongNumber += 1;

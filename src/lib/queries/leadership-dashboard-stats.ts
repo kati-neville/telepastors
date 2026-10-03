@@ -26,6 +26,7 @@ type RawLeadershipStats = {
   coming?: number;
   notComing?: number;
   unreachable?: number;
+  switchedOff?: number;
   wrongNumber?: number;
   other?: number;
   contactsWithNotes?: number;
@@ -58,6 +59,7 @@ function finalizeCampaignStatistics(
   stats.coming = asCount(raw.coming);
   stats.notComing = asCount(raw.notComing);
   stats.unreachable = asCount(raw.unreachable);
+  stats.switchedOff = asCount(raw.switchedOff);
   stats.wrongNumber = asCount(raw.wrongNumber);
   stats.other = asCount(raw.other);
   stats.totalCallAttempts = asCount(raw.totalCallAttempts);

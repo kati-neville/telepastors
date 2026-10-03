@@ -9,6 +9,7 @@ const VARIANT: Record<
   COMING: "default",
   NOT_COMING: "secondary",
   UNREACHABLE: "outline",
+  SWITCHED_OFF: "outline",
   WRONG_NUMBER: "destructive",
   OTHER: "secondary",
 };

@@ -38,6 +38,7 @@ export const CALL_RESPONSE_LABELS: Record<CallResponse, string> = {
   COMING: "Coming",
   NOT_COMING: "Not Coming",
   UNREACHABLE: "Unreachable",
+  SWITCHED_OFF: "Switched Off",
   WRONG_NUMBER: "Wrong Number",
   OTHER: "Other",
 };
@@ -46,6 +47,7 @@ export const CALL_RESPONSE_SHORT_LABELS: Record<CallResponse, string> = {
   COMING: "Coming",
   NOT_COMING: "Not Coming",
   UNREACHABLE: "Unreachable",
+  SWITCHED_OFF: "Switched Off",
   WRONG_NUMBER: "Wrong Number",
   OTHER: "Other",
 };

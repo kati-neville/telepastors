@@ -146,6 +146,7 @@ export type Database = {
             | "COMING"
             | "NOT_COMING"
             | "UNREACHABLE"
+            | "SWITCHED_OFF"
             | "WRONG_NUMBER"
             | "OTHER"
             | null;
@@ -176,6 +177,7 @@ export type Database = {
             | "COMING"
             | "NOT_COMING"
             | "UNREACHABLE"
+            | "SWITCHED_OFF"
             | "WRONG_NUMBER"
             | "OTHER"
             | null;
@@ -206,6 +208,7 @@ export type Database = {
             | "COMING"
             | "NOT_COMING"
             | "UNREACHABLE"
+            | "SWITCHED_OFF"
             | "WRONG_NUMBER"
             | "OTHER"
             | null;
@@ -421,6 +424,7 @@ export type Database = {
             | "COMING"
             | "NOT_COMING"
             | "UNREACHABLE"
+            | "SWITCHED_OFF"
             | "WRONG_NUMBER"
             | "OTHER";
           notes: string | null;
@@ -436,6 +440,7 @@ export type Database = {
             | "COMING"
             | "NOT_COMING"
             | "UNREACHABLE"
+            | "SWITCHED_OFF"
             | "WRONG_NUMBER"
             | "OTHER";
           notes?: string | null;
@@ -451,6 +456,7 @@ export type Database = {
             | "COMING"
             | "NOT_COMING"
             | "UNREACHABLE"
+            | "SWITCHED_OFF"
             | "WRONG_NUMBER"
             | "OTHER";
           notes?: string | null;
@@ -931,6 +937,7 @@ export type Database = {
         | "COMING"
         | "NOT_COMING"
         | "UNREACHABLE"
+        | "SWITCHED_OFF"
         | "WRONG_NUMBER"
         | "OTHER";
       sms_broadcast_status:

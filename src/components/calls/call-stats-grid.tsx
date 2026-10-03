@@ -10,6 +10,7 @@ export function CallStatsGrid({ stats }: { stats: CallQueueStats }) {
       <StatCard label="Coming" value={stats.coming} />
       <StatCard label="Not Coming" value={stats.notComing} />
       <StatCard label="Unreachable" value={stats.unreachable} />
+      <StatCard label="Switched Off" value={stats.switchedOff} />
     </div>
   );
 }

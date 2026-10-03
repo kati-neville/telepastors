@@ -219,6 +219,7 @@ export const CALL_RESPONSES = [
   "COMING",
   "NOT_COMING",
   "UNREACHABLE",
+  "SWITCHED_OFF",
   "WRONG_NUMBER",
   "OTHER",
 ] as const;
@@ -254,6 +255,7 @@ export type CallQueueStats = {
   coming: number;
   notComing: number;
   unreachable: number;
+  switchedOff: number;
   wrongNumber: number;
   other: number;
 };
@@ -272,6 +274,7 @@ export type CampaignStatistics = {
   coming: number;
   notComing: number;
   unreachable: number;
+  switchedOff: number;
   wrongNumber: number;
   other: number;
   completionPercentage: number;

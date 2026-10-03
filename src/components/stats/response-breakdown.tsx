@@ -4,13 +4,14 @@ import type { CampaignStatistics } from "@/types/domain";
 const RESPONSE_ITEMS: {
   key: keyof Pick<
     CampaignStatistics,
-    "coming" | "notComing" | "unreachable" | "wrongNumber" | "other"
+    "coming" | "notComing" | "unreachable" | "switchedOff" | "wrongNumber" | "other"
   >;
   label: keyof typeof CALL_RESPONSE_LABELS;
 }[] = [
   { key: "coming", label: "COMING" },
   { key: "notComing", label: "NOT_COMING" },
   { key: "unreachable", label: "UNREACHABLE" },
+  { key: "switchedOff", label: "SWITCHED_OFF" },
   { key: "wrongNumber", label: "WRONG_NUMBER" },
   { key: "other", label: "OTHER" },
 ];
@@ -20,6 +21,7 @@ export function ResponseBreakdown({ stats }: { stats: CampaignStatistics }) {
     stats.coming,
     stats.notComing,
     stats.unreachable,
+    stats.switchedOff,
     stats.wrongNumber,
     stats.other,
     1,

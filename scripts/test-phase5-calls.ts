@@ -135,6 +135,7 @@ function testResponseValidation() {
   for (const response of [
     "NOT_COMING",
     "UNREACHABLE",
+    "SWITCHED_OFF",
     "WRONG_NUMBER",
   ] as const) {
     const parsed = recordCallAttemptSchema.safeParse({
