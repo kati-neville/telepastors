@@ -337,7 +337,7 @@ export type Database = {
           id: string;
           campaign_id: string;
           actor_id: string;
-          status: "pending" | "running" | "completed" | "failed";
+          status: "pending" | "running" | "completed" | "failed" | "undone";
           retain_count: number;
           pool_total: number;
           assigned_count: number;
@@ -350,12 +350,14 @@ export type Database = {
           created_at: string;
           started_at: string | null;
           completed_at: string | null;
+          undone_at: string | null;
+          undo_result: Json | null;
         };
         Insert: {
           id?: string;
           campaign_id: string;
           actor_id: string;
-          status?: "pending" | "running" | "completed" | "failed";
+          status?: "pending" | "running" | "completed" | "failed" | "undone";
           retain_count?: number;
           pool_total?: number;
           assigned_count?: number;
@@ -368,12 +370,14 @@ export type Database = {
           created_at?: string;
           started_at?: string | null;
           completed_at?: string | null;
+          undone_at?: string | null;
+          undo_result?: Json | null;
         };
         Update: {
           id?: string;
           campaign_id?: string;
           actor_id?: string;
-          status?: "pending" | "running" | "completed" | "failed";
+          status?: "pending" | "running" | "completed" | "failed" | "undone";
           retain_count?: number;
           pool_total?: number;
           assigned_count?: number;
@@ -386,6 +390,8 @@ export type Database = {
           created_at?: string;
           started_at?: string | null;
           completed_at?: string | null;
+          undone_at?: string | null;
+          undo_result?: Json | null;
         };
         Relationships: [
           {
@@ -882,6 +888,15 @@ export type Database = {
           p_assignments: Json;
           p_assigned_by: string;
           p_notes?: string | null;
+        };
+        Returns: Json;
+      };
+      undo_distribution_reclaim_contacts: {
+        Args: {
+          p_campaign_id: string;
+          p_actor_id: string;
+          p_mode: string;
+          p_items: Json;
         };
         Returns: Json;
       };

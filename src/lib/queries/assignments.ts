@@ -80,8 +80,8 @@ export async function fetchDistributionStats(
 	if (pool === "assigned_to_self") {
 		const actorId = context.telepastor.id;
 
-		const [assignedToMe, heldResult, assignedToActorResult] =
-			await Promise.all([
+		const [assignedToMe, heldResult, assignedToActorResult] = await Promise.all(
+			[
 				countDistributionPoolContactsForCampaign(campaignId, context),
 				supabase
 					.from("contacts")
@@ -94,7 +94,8 @@ export async function fetchDistributionStats(
 					.select("id", { count: "exact", head: true })
 					.eq("campaign_id", campaignId)
 					.eq("current_assignee_id", actorId),
-			]);
+			],
+		);
 
 		if (heldResult.error) {
 			throw new Error(
@@ -458,4 +459,56 @@ export async function fetchDistributionSummary(
 		),
 		campaigns: summaries,
 	};
+}
+
+export async function fetchRecentDistributionJobsForActor(
+	campaignId: string,
+	actorId: string,
+	limit = 10,
+) {
+	const supabase = await createClient();
+	const { data, error } = await supabase
+		.from("distribution_jobs")
+		.select(
+			"id, campaign_id, status, retain_count, pool_total, assigned_count, completed_at, undone_at, result, undo_result, plan, created_at",
+		)
+		.eq("campaign_id", campaignId)
+		.eq("actor_id", actorId)
+		.in("status", ["completed", "undone"])
+		.order("completed_at", { ascending: false, nullsFirst: false })
+		.limit(limit);
+
+	if (error) {
+		// Older DBs may not have undone_at/undo_result yet.
+		if (
+			error.message?.includes("undone_at") ||
+			error.message?.includes("undo_result") ||
+			error.code === "42703"
+		) {
+			const fallback = await supabase
+				.from("distribution_jobs")
+				.select(
+					"id, campaign_id, status, retain_count, pool_total, assigned_count, completed_at, result, plan, created_at",
+				)
+				.eq("campaign_id", campaignId)
+				.eq("actor_id", actorId)
+				.eq("status", "completed")
+				.order("completed_at", { ascending: false, nullsFirst: false })
+				.limit(limit);
+
+			if (fallback.error) {
+				throw new Error(fallback.error.message);
+			}
+
+			const { mapDistributionJobRow } =
+				await import("@/lib/assignments/undo-distribution");
+			return (fallback.data ?? []).map(mapDistributionJobRow);
+		}
+
+		throw new Error(error.message);
+	}
+
+	const { mapDistributionJobRow } =
+		await import("@/lib/assignments/undo-distribution");
+	return (data ?? []).map(mapDistributionJobRow);
 }
