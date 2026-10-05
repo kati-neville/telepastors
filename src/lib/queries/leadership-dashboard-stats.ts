@@ -143,6 +143,12 @@ async function fetchLeanScopedContacts(
       if (filters.response) {
         query = query.eq("latest_response", filters.response);
       }
+      if (filters.from) {
+        query = query.gte("latest_response_at", filters.from);
+      }
+      if (filters.to) {
+        query = query.lte("latest_response_at", filters.to);
+      }
 
       return query;
     });
@@ -166,6 +172,12 @@ async function fetchLeanScopedContacts(
       }
       if (filters.response) {
         query = query.eq("latest_response", filters.response);
+      }
+      if (filters.from) {
+        query = query.gte("latest_response_at", filters.from);
+      }
+      if (filters.to) {
+        query = query.lte("latest_response_at", filters.to);
       }
 
       return query;

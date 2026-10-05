@@ -4,6 +4,7 @@ import { BarChart3 } from "lucide-react";
 import { CampaignStatsOverview } from "@/components/stats/campaign-stats-overview";
 import { RecentActivityPanel } from "@/components/stats/recent-activity-panel";
 import { ResponseBreakdown } from "@/components/stats/response-breakdown";
+import { ReportHeadlineStats } from "@/components/reports/report-headline-stats";
 import { TeamPerformanceSection } from "@/components/reports/team-performance-section";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stats/stat-card";
@@ -25,6 +26,7 @@ export function LeadershipDashboardStats({
   filters,
   showFullReportsLink = true,
   showHeader = true,
+  variant = "dashboard",
   recentActivity,
   teamPerformance,
 }: {
@@ -32,10 +34,12 @@ export function LeadershipDashboardStats({
   filters: ReportFilterValues;
   showFullReportsLink?: boolean;
   showHeader?: boolean;
+  variant?: "dashboard" | "reports";
   recentActivity: React.ReactNode;
   teamPerformance: React.ReactNode;
 }) {
   const contactsWithNotesHref = buildContactsWithNotesHref(filters);
+  const isReports = variant === "reports";
 
   return (
     <div className="space-y-6">
@@ -59,30 +63,40 @@ export function LeadershipDashboardStats({
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active campaigns" value={data.activeCampaigns} />
-        <StatCard
-          label="Total call attempts"
-          value={data.stats.totalCallAttempts}
-          description="Includes repeat attempts"
-        />
-        <StatCard
-          label="Completion"
-          value={data.stats.completionPercentage}
-          suffix="%"
-          highlight
-        />
-        <StatCard
-          label="Reach rate"
-          value={data.stats.reachRate}
-          suffix="%"
-        />
-      </div>
+      {isReports ? (
+        <ReportHeadlineStats stats={data.stats} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Active campaigns" value={data.activeCampaigns} />
+          <StatCard
+            label="Total call attempts"
+            value={data.stats.totalCallAttempts}
+            description="Includes repeat attempts"
+          />
+          <StatCard
+            label="Completion"
+            value={data.stats.completionPercentage}
+            suffix="%"
+            highlight
+          />
+          <StatCard
+            label="Reach rate"
+            value={data.stats.reachRate}
+            suffix="%"
+          />
+        </div>
+      )}
 
       <CampaignStatsOverview
         stats={data.stats}
         contactsWithNotesCount={data.contactsWithNotesCount}
         contactsWithNotesHref={contactsWithNotesHref}
+        showRates={!isReports}
+        extraCards={
+          isReports ? (
+            <StatCard label="Active campaigns" value={data.activeCampaigns} />
+          ) : null
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -146,12 +160,14 @@ export function LeadershipDashboard({
   filters,
   showFullReportsLink = true,
   showHeader = true,
+  variant = "dashboard",
 }: {
   data: LeadershipDashboardData;
   role: MinistryRole;
   filters: ReportFilterValues;
   showFullReportsLink?: boolean;
   showHeader?: boolean;
+  variant?: "dashboard" | "reports";
 }) {
   return (
     <LeadershipDashboardStats
@@ -159,6 +175,7 @@ export function LeadershipDashboard({
       filters={filters}
       showFullReportsLink={showFullReportsLink}
       showHeader={showHeader}
+      variant={variant}
       recentActivity={
         <LeadershipRecentActivity
           activity={data.recentActivity}
@@ -168,6 +185,7 @@ export function LeadershipDashboard({
       teamPerformance={
         <Suspense fallback={<TeamPerformanceSkeleton />}>
           <LeadershipTeamPerformance
+            key={`${filters.campaignId ?? ""}-${filters.governorId ?? ""}-${filters.leaderId ?? ""}-${filters.telepastorId ?? ""}-${filters.response ?? ""}-${filters.from ?? ""}-${filters.to ?? ""}-${filters.hasNotes ?? ""}`}
             bundle={data.teamPerformanceBundle}
             role={role}
             filters={filters}

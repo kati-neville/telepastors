@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ContactsWithNotesCard } from "@/components/stats/contacts-with-notes-card";
 import { StatCard } from "@/components/stats/stat-card";
 import type { CampaignStatistics } from "@/types/domain";
@@ -6,10 +7,14 @@ export function CampaignStatsOverview({
   stats,
   contactsWithNotesCount,
   contactsWithNotesHref,
+  showRates = true,
+  extraCards,
 }: {
   stats: CampaignStatistics;
   contactsWithNotesCount?: number;
   contactsWithNotesHref?: string;
+  showRates?: boolean;
+  extraCards?: React.ReactNode;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -23,12 +28,19 @@ export function CampaignStatsOverview({
       <StatCard label="Total contacts" value={stats.totalContacts} />
       <StatCard label="Assigned" value={stats.assigned} />
       <StatCard label="Unassigned" value={stats.unassigned} />
-      <StatCard label="Completed" value={stats.completed} highlight />
+      {showRates ? (
+        <StatCard label="Completed" value={stats.completed} highlight />
+      ) : null}
       <StatCard label="Remaining" value={stats.remaining} />
       <StatCard label="Call attempts" value={stats.totalCallAttempts} description="Total attempts (not unique contacts)" />
-      <StatCard label="Completion" value={stats.completionPercentage} suffix="%" />
-      <StatCard label="Reach rate" value={stats.reachRate} suffix="%" description="Excludes unreachable" />
-      <StatCard label="Coming rate" value={stats.comingPercentage} suffix="%" description="Of completed contacts" />
+      {extraCards}
+      {showRates ? (
+        <>
+          <StatCard label="Completion" value={stats.completionPercentage} suffix="%" />
+          <StatCard label="Reach rate" value={stats.reachRate} suffix="%" description="Excludes unreachable" />
+          <StatCard label="Coming rate" value={stats.comingPercentage} suffix="%" description="Of completed contacts" />
+        </>
+      ) : null}
     </div>
   );
 }

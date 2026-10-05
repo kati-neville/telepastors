@@ -24,6 +24,14 @@ export async function requireReportsAccess() {
   return { session, context };
 }
 
+export async function loadLeadershipDashboardAction(
+  filtersInput: unknown,
+) {
+  const { context } = await requireReportsAccess();
+  const filters = reportFilterSchema.parse(filtersInput ?? {});
+  return fetchLeadershipDashboard(context, filters);
+}
+
 export async function exportTeamPerformanceCsv(filtersInput: unknown) {
   const { context } = await requireReportsAccess();
   const filters = reportFilterSchema.parse(filtersInput ?? {});

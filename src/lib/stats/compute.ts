@@ -92,6 +92,18 @@ export function computeContactStatistics(
   return stats;
 }
 
+export function getReachedContactCount(stats: CampaignStatistics) {
+  return stats.coming + stats.notComing + stats.wrongNumber + stats.other;
+}
+
+export function percentOf(part: number, whole: number) {
+  if (whole <= 0) {
+    return 0;
+  }
+
+  return Math.round((part / whole) * 1000) / 10;
+}
+
 export function groupContactsByAssignee(contacts: ContactStatRow[]) {
   const groups = new Map<string, ContactStatRow[]>();
 

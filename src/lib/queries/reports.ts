@@ -87,6 +87,152 @@ async function fetchAllMembers(): Promise<TelepastorSummary[]> {
   return data ?? [];
 }
 
+function applyContactReportFilters<
+  T extends {
+    eq: (column: string, value: string) => T;
+    gte: (column: string, value: string) => T;
+    lte: (column: string, value: string) => T;
+    in: (column: string, values: string[]) => T;
+  },
+>(query: T, filters: ReportFilterValues) {
+  let nextQuery = query;
+
+  if (filters.campaignId) {
+    nextQuery = nextQuery.eq("campaign_id", filters.campaignId);
+  }
+  if (filters.response) {
+    nextQuery = nextQuery.eq("latest_response", filters.response);
+  }
+  if (filters.from) {
+    nextQuery = nextQuery.gte("latest_response_at", filters.from);
+  }
+  if (filters.to) {
+    nextQuery = nextQuery.lte("latest_response_at", filters.to);
+  }
+
+  return nextQuery;
+}
+
+async function fetchContactIdsWithAttemptsInPeriod(
+  filters: ReportFilterValues,
+): Promise<Set<string> | null> {
+  if (!filters.from && !filters.to) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const rows = await fetchAllPages<{ contact_id: string }>(async (from, to) => {
+    let query = supabase
+      .from("call_attempts")
+      .select("contact_id")
+      .order("contact_id", { ascending: true })
+      .range(from, to);
+
+    if (filters.campaignId) {
+      query = query.eq("campaign_id", filters.campaignId);
+    }
+    if (filters.response) {
+      query = query.eq("response", filters.response);
+    }
+    query = applyAttemptDateFilters(query, filters);
+
+    return query;
+  });
+
+  return new Set(rows.map((row) => row.contact_id));
+}
+
+async function fetchContactsByIds(
+  contactIds: string[],
+  assigneeIds: string[] | null,
+  filters: ReportFilterValues,
+  unassignedOnly = false,
+): Promise<ContactRow[]> {
+  if (contactIds.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const rows: ContactRow[] = [];
+
+  for (const batch of chunk(contactIds, CONTACT_ID_BATCH_SIZE)) {
+    let query = supabase
+      .from("contacts")
+      .select(
+        "id, campaign_id, latest_response, assignment_status, current_assignee_id",
+      )
+      .in("id", batch);
+
+    if (unassignedOnly) {
+      query = query.is("current_assignee_id", null);
+    } else if (assigneeIds && assigneeIds.length > 0) {
+      query = query.in("current_assignee_id", assigneeIds);
+    }
+
+    if (filters.campaignId) {
+      query = query.eq("campaign_id", filters.campaignId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throwQueryError("Failed to load contacts for report scope.", error);
+    }
+    rows.push(...((data ?? []) as ContactRow[]));
+  }
+
+  return rows;
+}
+
+async function overlayPeriodResponses(
+  contacts: ContactRow[],
+  filters: ReportFilterValues,
+): Promise<ContactRow[]> {
+  if ((!filters.from && !filters.to) || contacts.length === 0) {
+    return contacts;
+  }
+
+  const supabase = await createClient();
+  const latestByContact = new Map<string, ContactRow["latest_response"]>();
+
+  for (const batch of chunk(
+    contacts.map((contact) => contact.id),
+    CONTACT_ID_BATCH_SIZE,
+  )) {
+    let query = supabase
+      .from("call_attempts")
+      .select("contact_id, response, attempted_at")
+      .in("contact_id", batch)
+      .order("attempted_at", { ascending: false });
+
+    query = applyAttemptDateFilters(query, filters);
+
+    const { data, error } = await query;
+    if (error) {
+      throwQueryError("Failed to load period call attempts.", error);
+    }
+
+    for (const attempt of data ?? []) {
+      if (!latestByContact.has(attempt.contact_id)) {
+        latestByContact.set(
+          attempt.contact_id,
+          attempt.response as ContactRow["latest_response"],
+        );
+      }
+    }
+  }
+
+  return contacts
+    .filter((contact) => latestByContact.has(contact.id))
+    .map((contact) => ({
+      ...contact,
+      latest_response: latestByContact.get(contact.id) ?? contact.latest_response,
+    }))
+    .filter(
+      (contact) =>
+        !filters.response || contact.latest_response === filters.response,
+    );
+}
+
 async function fetchContactsForScope(
   assigneeIds: string[] | null,
   filters: ReportFilterValues,
@@ -95,9 +241,19 @@ async function fetchContactsForScope(
     return [];
   }
 
+  const periodIds = await fetchContactIdsWithAttemptsInPeriod(filters);
+  if (periodIds) {
+    const contacts = await fetchContactsByIds(
+      [...periodIds],
+      assigneeIds,
+      filters,
+    );
+    return overlayPeriodResponses(contacts, filters);
+  }
+
   const supabase = await createClient();
 
-  return fetchAllPages<ContactRow>(async (from, to) => {
+  const contacts = await fetchAllPages<ContactRow>(async (from, to) => {
     let query = supabase
       .from("contacts")
       .select(
@@ -110,19 +266,23 @@ async function fetchContactsForScope(
       query = query.in("current_assignee_id", assigneeIds);
     }
 
-    if (filters.campaignId) {
-      query = query.eq("campaign_id", filters.campaignId);
-    }
-
-    if (filters.response) {
-      query = query.eq("latest_response", filters.response);
-    }
+    query = applyContactReportFilters(query, filters);
 
     return query;
   });
+
+  return contacts;
 }
 
 async function fetchUnassignedContacts(filters: ReportFilterValues) {
+  const periodIds = await fetchContactIdsWithAttemptsInPeriod(filters);
+  if (periodIds) {
+    return overlayPeriodResponses(
+      await fetchContactsByIds([...periodIds], null, filters, true),
+      filters,
+    );
+  }
+
   const supabase = await createClient();
 
   return fetchAllPages<ContactRow>(async (from, to) => {
@@ -135,9 +295,7 @@ async function fetchUnassignedContacts(filters: ReportFilterValues) {
       .order("id", { ascending: true })
       .range(from, to);
 
-    if (filters.campaignId) {
-      query = query.eq("campaign_id", filters.campaignId);
-    }
+    query = applyContactReportFilters(query, filters);
 
     return query;
   });
@@ -532,15 +690,12 @@ function buildTeamPerformance(
     .sort((a, b) => b.stats.completed - a.stats.completed);
 }
 
-function stripTeamPerformanceScopeFilters(
+function stripTeamPerformanceViewFilter(
   filters: ReportFilterValues,
 ): ReportFilterValues {
   return {
     ...filters,
     view: undefined,
-    governorId: undefined,
-    leaderId: undefined,
-    telepastorId: undefined,
   };
 }
 
@@ -548,7 +703,7 @@ async function buildTeamPerformanceBundle(
   context: AuthorizationContext,
   filters: ReportFilterValues,
 ): Promise<TeamPerformanceBundle> {
-  const bundleFilters = stripTeamPerformanceScopeFilters(filters);
+  const bundleFilters = stripTeamPerformanceViewFilter(filters);
   const allMembers = await fetchAllMembers();
   const scopedMembers = getReportableMembers(
     context,
@@ -613,10 +768,11 @@ export async function fetchLeadershipDashboardShell(
 ): Promise<LeadershipDashboardShellData> {
   const allMembers = await fetchAllMembers();
   const scopedMembers = getReportableMembers(context, filters, allMembers);
+  const optionMembers = getReportableMembers(context, {}, allMembers);
 
   const [contactStats, filterOptions] = await Promise.all([
     fetchLeadershipContactStats(context, filters, scopedMembers),
-    buildFilterOptions(context, scopedMembers),
+    buildFilterOptions(context, optionMembers),
   ]);
 
   return {
@@ -633,50 +789,26 @@ export async function fetchLeadershipDashboardExtras(
   context: AuthorizationContext,
   filters: ReportFilterValues = {},
 ): Promise<LeadershipDashboardExtrasData> {
-  const bundleFilters = stripTeamPerformanceScopeFilters(filters);
   const allMembers = await fetchAllMembers();
   const scopedMembers = getReportableMembers(context, filters, allMembers);
-  const bundleMembers = getReportableMembers(context, bundleFilters, allMembers);
   const assigneeIds = getScopedAssigneeIds(scopedMembers);
-  const bundleAssigneeIds = getScopedAssigneeIds(bundleMembers);
 
-  const [scopedContacts, bundleContacts] = await Promise.all([
-    (async () => {
-      let contacts = await fetchContactsForScope(assigneeIds, filters);
-      if (
-        context.telepastor.role === "SUPER_ADMIN" &&
-        !filters.governorId &&
-        !filters.leaderId &&
-        !filters.telepastorId
-      ) {
-        contacts = [...contacts, ...(await fetchUnassignedContacts(filters))];
-      }
-      return contacts;
-    })(),
-    // Team performance intentionally uses unscoped person filters.
-    (async () => {
-      let contacts = await fetchContactsForScope(bundleAssigneeIds, bundleFilters);
-      if (
-        context.telepastor.role === "SUPER_ADMIN" &&
-        !bundleFilters.governorId &&
-        !bundleFilters.leaderId &&
-        !bundleFilters.telepastorId
-      ) {
-        contacts = [
-          ...contacts,
-          ...(await fetchUnassignedContacts(bundleFilters)),
-        ];
-      }
-      return contacts;
-    })(),
-  ]);
+  let contacts = await fetchContactsForScope(assigneeIds, filters);
+  if (
+    context.telepastor.role === "SUPER_ADMIN" &&
+    !filters.governorId &&
+    !filters.leaderId &&
+    !filters.telepastorId
+  ) {
+    contacts = [...contacts, ...(await fetchUnassignedContacts(filters))];
+  }
 
   const [attemptData, recentActivity] = await Promise.all([
-    countAttemptsByAssignee(bundleContacts, bundleFilters),
-    fetchRecentActivity(scopedContacts, filters, RECENT_ACTIVITY_PREVIEW_LIMIT),
+    countAttemptsByAssignee(contacts, filters),
+    fetchRecentActivity(contacts, filters, RECENT_ACTIVITY_PREVIEW_LIMIT),
   ]);
 
-  const performanceMembers = bundleMembers.filter(
+  const performanceMembers = scopedMembers.filter(
     (member) =>
       memberMatchesPerformanceView(member.role, "telepastor") ||
       memberMatchesPerformanceView(member.role, "leader"),
@@ -684,20 +816,20 @@ export async function fetchLeadershipDashboardExtras(
 
   const memberRows = buildTeamPerformance(
     performanceMembers,
-    bundleContacts,
+    contacts,
     attemptData,
   );
 
   const governorRows =
     context.telepastor.role === "SUPER_ADMIN"
-      ? buildGovernorPerformance(allMembers, bundleContacts, attemptData)
+      ? buildGovernorPerformance(allMembers, contacts, attemptData)
       : [];
 
   return {
     teamPerformanceBundle: {
       governorRows,
       memberRows,
-      members: bundleMembers,
+      members: scopedMembers,
     },
     recentActivity,
   };

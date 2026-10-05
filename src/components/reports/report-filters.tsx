@@ -24,6 +24,7 @@ type ReportFiltersProps = {
 	filters: ReportFilterValues;
 	options: ReportFilterOptions;
 	role: "SUPER_ADMIN" | "GOVERNOR" | "LEADER";
+	onApply?: (filters: ReportFilterValues) => void;
 };
 
 function countActiveFilters(
@@ -54,7 +55,7 @@ function fromSelectValue(value: string | null | undefined) {
 	return value;
 }
 
-export function ReportFilters({ filters, options, role }: ReportFiltersProps) {
+export function ReportFilters({ filters, options, role, onApply }: ReportFiltersProps) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const [open, setOpen] = useState(false);
@@ -88,23 +89,44 @@ export function ReportFilters({ filters, options, role }: ReportFiltersProps) {
 	const leaderItems = useMemo(
 		() => [
 			{ value: ALL_VALUE, label: "All leaders" },
-			...options.leaders.map(leader => ({
-				value: leader.id,
-				label: leader.name,
-			})),
+			...options.leaders
+				.filter(leader =>
+					draft.governorId ? leader.governor_id === draft.governorId : true,
+				)
+				.map(leader => ({
+					value: leader.id,
+					label: leader.name,
+				})),
 		],
-		[options.leaders],
+		[options.leaders, draft.governorId],
 	);
 
 	const telepastorItems = useMemo(
 		() => [
 			{ value: ALL_VALUE, label: "All telepastors" },
-			...options.telepastors.map(telepastor => ({
-				value: telepastor.id,
-				label: telepastor.name,
-			})),
+			...options.telepastors
+				.filter(telepastor => {
+					if (draft.leaderId) {
+						return telepastor.leader_id === draft.leaderId;
+					}
+					if (draft.governorId) {
+						return (
+							telepastor.governor_id === draft.governorId ||
+							options.leaders.some(
+								leader =>
+									leader.id === telepastor.leader_id &&
+									leader.governor_id === draft.governorId,
+							)
+						);
+					}
+					return true;
+				})
+				.map(telepastor => ({
+					value: telepastor.id,
+					label: telepastor.name,
+				})),
 		],
-		[options.telepastors],
+		[options.telepastors, options.leaders, draft.governorId, draft.leaderId],
 	);
 
 	const responseItems = useMemo(
@@ -123,6 +145,11 @@ export function ReportFilters({ filters, options, role }: ReportFiltersProps) {
 	};
 
 	const applyFilters = (next: ReportFilterValues) => {
+		if (onApply) {
+			onApply(next);
+			return;
+		}
+
 		const params = new URLSearchParams();
 
 		if (next.campaignId) params.set("campaignId", next.campaignId);
