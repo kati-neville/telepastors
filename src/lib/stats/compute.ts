@@ -29,6 +29,67 @@ export function emptyCampaignStatistics(): CampaignStatistics {
   };
 }
 
+export type CampaignStatCounts = {
+  totalContacts?: number;
+  assigned?: number;
+  unassigned?: number;
+  completed?: number;
+  remaining?: number;
+  coming?: number;
+  notComing?: number;
+  unreachable?: number;
+  switchedOff?: number;
+  wrongNumber?: number;
+  other?: number;
+  totalCallAttempts?: number;
+};
+
+export function asStatCount(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function withDerivedCampaignRates(
+  stats: CampaignStatistics,
+): CampaignStatistics {
+  const denominator = stats.totalContacts > 0 ? stats.totalContacts : 0;
+  stats.completionPercentage =
+    denominator > 0
+      ? Math.round((stats.completed / denominator) * 1000) / 10
+      : 0;
+
+  const reached =
+    stats.coming + stats.notComing + stats.wrongNumber + stats.other;
+  stats.reachRate =
+    denominator > 0 ? Math.round((reached / denominator) * 1000) / 10 : 0;
+
+  stats.comingPercentage =
+    stats.completed > 0
+      ? Math.round((stats.coming / stats.completed) * 1000) / 10
+      : 0;
+
+  return stats;
+}
+
+export function campaignStatisticsFromCounts(
+  raw: CampaignStatCounts,
+): CampaignStatistics {
+  const stats = emptyCampaignStatistics();
+  stats.totalContacts = asStatCount(raw.totalContacts);
+  stats.assigned = asStatCount(raw.assigned);
+  stats.unassigned = asStatCount(raw.unassigned);
+  stats.completed = asStatCount(raw.completed);
+  stats.remaining = asStatCount(raw.remaining);
+  stats.coming = asStatCount(raw.coming);
+  stats.notComing = asStatCount(raw.notComing);
+  stats.unreachable = asStatCount(raw.unreachable);
+  stats.switchedOff = asStatCount(raw.switchedOff);
+  stats.wrongNumber = asStatCount(raw.wrongNumber);
+  stats.other = asStatCount(raw.other);
+  stats.totalCallAttempts = asStatCount(raw.totalCallAttempts);
+  return withDerivedCampaignRates(stats);
+}
+
 export function computeContactStatistics(
   contacts: ContactStatRow[],
   totalCallAttempts = 0,
@@ -73,26 +134,15 @@ export function computeContactStatistics(
     }
   }
 
-  const denominator = stats.totalContacts > 0 ? stats.totalContacts : 0;
-  stats.completionPercentage =
-    denominator > 0
-      ? Math.round((stats.completed / denominator) * 1000) / 10
-      : 0;
-
-  const reached =
-    stats.coming + stats.notComing + stats.wrongNumber + stats.other;
-  stats.reachRate =
-    denominator > 0 ? Math.round((reached / denominator) * 1000) / 10 : 0;
-
-  stats.comingPercentage =
-    stats.completed > 0
-      ? Math.round((stats.coming / stats.completed) * 1000) / 10
-      : 0;
-
-  return stats;
+  return withDerivedCampaignRates(stats);
 }
 
-export function getReachedContactCount(stats: CampaignStatistics) {
+export function getReachedContactCount(
+  stats: Pick<
+    CampaignStatistics,
+    "coming" | "notComing" | "wrongNumber" | "other"
+  >,
+) {
   return stats.coming + stats.notComing + stats.wrongNumber + stats.other;
 }
 

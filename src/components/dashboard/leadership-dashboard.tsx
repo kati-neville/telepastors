@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { BarChart3 } from "lucide-react";
 import { CampaignStatsOverview } from "@/components/stats/campaign-stats-overview";
 import { RecentActivityPanel } from "@/components/stats/recent-activity-panel";
@@ -13,7 +12,6 @@ import { buildContactsWithNotesHref } from "@/lib/reports/contacts-with-notes-ur
 import { buildActivityHref } from "@/lib/reports/activity-url";
 import type { LeadershipDashboardShellData } from "@/lib/queries/reports";
 import type {
-  LeadershipDashboardData,
   MinistryRole,
   RecentCallActivity,
   ReportFilterOptions,
@@ -63,39 +61,15 @@ export function LeadershipDashboardStats({
         </div>
       ) : null}
 
-      {isReports ? (
-        <ReportHeadlineStats stats={data.stats} />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Active campaigns" value={data.activeCampaigns} />
-          <StatCard
-            label="Total call attempts"
-            value={data.stats.totalCallAttempts}
-            description="Includes repeat attempts"
-          />
-          <StatCard
-            label="Completion"
-            value={data.stats.completionPercentage}
-            suffix="%"
-            highlight
-          />
-          <StatCard
-            label="Reach rate"
-            value={data.stats.reachRate}
-            suffix="%"
-          />
-        </div>
-      )}
+      <ReportHeadlineStats stats={data.stats} size={isReports ? "default" : "lg"} />
 
       <CampaignStatsOverview
         stats={data.stats}
         contactsWithNotesCount={data.contactsWithNotesCount}
         contactsWithNotesHref={contactsWithNotesHref}
-        showRates={!isReports}
+        showRates={false}
         extraCards={
-          isReports ? (
-            <StatCard label="Active campaigns" value={data.activeCampaigns} />
-          ) : null
+          <StatCard label="Active campaigns" value={data.activeCampaigns} />
         }
       />
 
@@ -149,50 +123,6 @@ export function LeadershipTeamPerformance({
       role={role}
       filters={filters}
       filterOptions={filterOptions}
-    />
-  );
-}
-
-/** Full dashboard used by reports (stats + extras already loaded). */
-export function LeadershipDashboard({
-  data,
-  role,
-  filters,
-  showFullReportsLink = true,
-  showHeader = true,
-  variant = "dashboard",
-}: {
-  data: LeadershipDashboardData;
-  role: MinistryRole;
-  filters: ReportFilterValues;
-  showFullReportsLink?: boolean;
-  showHeader?: boolean;
-  variant?: "dashboard" | "reports";
-}) {
-  return (
-    <LeadershipDashboardStats
-      data={data}
-      filters={filters}
-      showFullReportsLink={showFullReportsLink}
-      showHeader={showHeader}
-      variant={variant}
-      recentActivity={
-        <LeadershipRecentActivity
-          activity={data.recentActivity}
-          filters={filters}
-        />
-      }
-      teamPerformance={
-        <Suspense fallback={<TeamPerformanceSkeleton />}>
-          <LeadershipTeamPerformance
-            key={`${filters.campaignId ?? ""}-${filters.governorId ?? ""}-${filters.leaderId ?? ""}-${filters.telepastorId ?? ""}-${filters.response ?? ""}-${filters.from ?? ""}-${filters.to ?? ""}-${filters.hasNotes ?? ""}`}
-            bundle={data.teamPerformanceBundle}
-            role={role}
-            filters={filters}
-            filterOptions={data.filterOptions}
-          />
-        </Suspense>
-      }
     />
   );
 }

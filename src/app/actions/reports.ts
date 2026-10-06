@@ -5,7 +5,7 @@ import { canAccessLeadershipReports } from "@/lib/auth/reports";
 import { requireAuthSession } from "@/lib/auth/session";
 import {
   buildTeamPerformanceCsv,
-  fetchLeadershipDashboard,
+  fetchTeamPerformanceBundle,
 } from "@/lib/queries/reports";
 import {
   createInitialTeamPerformanceScope,
@@ -24,24 +24,16 @@ export async function requireReportsAccess() {
   return { session, context };
 }
 
-export async function loadLeadershipDashboardAction(
-  filtersInput: unknown,
-) {
-  const { context } = await requireReportsAccess();
-  const filters = reportFilterSchema.parse(filtersInput ?? {});
-  return fetchLeadershipDashboard(context, filters);
-}
-
 export async function exportTeamPerformanceCsv(filtersInput: unknown) {
   const { context } = await requireReportsAccess();
   const filters = reportFilterSchema.parse(filtersInput ?? {});
-  const data = await fetchLeadershipDashboard(context, filters);
+  const bundle = await fetchTeamPerformanceBundle(context, filters);
   const scope = createInitialTeamPerformanceScope(
     context.telepastor.role,
     filters,
   );
   const rows = selectTeamPerformanceRows(
-    data.teamPerformanceBundle,
+    bundle,
     context.telepastor.role,
     scope,
   );

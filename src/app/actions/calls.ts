@@ -21,9 +21,9 @@ type ActionResult<T = undefined> =
   | { success: true; data?: T }
   | { success: false; error: string };
 
+// /dashboard and /reports are fully dynamic (searchParams + cookies) and read
+// live aggregates, so busting them on every saved call is wasted work.
 function revalidateCallPaths() {
-  revalidatePath("/dashboard");
-  revalidatePath("/reports");
   revalidatePath("/my-calls");
   revalidatePath("/my-calls/queue");
   revalidatePath("/my-calls/list");
@@ -129,7 +129,7 @@ export async function recordCallAttemptAction(
     },
   });
 
-  const stats = await fetchCallQueueStats(context);
+  const stats = await fetchCallQueueStats();
   const remainingContacts = await supabase
     .from("contacts")
     .select("id")

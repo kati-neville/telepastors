@@ -5,7 +5,18 @@ import {
 } from "@/lib/stats/compute";
 import type { CampaignStatistics } from "@/types/domain";
 
-export function ReportHeadlineStats({ stats }: { stats: CampaignStatistics }) {
+type HeadlineStats = Pick<
+  CampaignStatistics,
+  "completed" | "coming" | "notComing" | "wrongNumber" | "other" | "totalContacts"
+>;
+
+export function ReportHeadlineStats({
+  stats,
+  size = "default",
+}: {
+  stats: HeadlineStats;
+  size?: "default" | "lg";
+}) {
   const called = stats.completed;
   const reached = getReachedContactCount(stats);
   const coming = stats.coming;
@@ -13,22 +24,25 @@ export function ReportHeadlineStats({ stats }: { stats: CampaignStatistics }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <StatCard
-        label="Total Called"
+        label="Total called"
         value={called}
         suffix={`${percentOf(called, stats.totalContacts)}%`}
         highlight
-        description="Individual contacts with a recorded response. % of all contacts."
+        size={size}
+        description="Contacts with a recorded response. % of all contacts."
       />
       <StatCard
-        label="Total Reached"
+        label="Reached"
         value={reached}
         suffix={`${percentOf(reached, called)}%`}
+        size={size}
         description="Spoken to — Coming, Not Coming, Wrong Number, or Other. % of called."
       />
       <StatCard
-        label="Total Coming"
+        label="Coming"
         value={coming}
         suffix={`${percentOf(coming, called)}%`}
+        size={size}
         description="Latest response marked Coming. % of called."
       />
     </div>

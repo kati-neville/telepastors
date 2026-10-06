@@ -14,8 +14,8 @@ import { canRetainContactsForCalling } from "@/lib/auth/assignments";
 import { fetchCallQueueStats } from "@/lib/queries/calls";
 
 export default async function MyCallsPage() {
-  const { session, context } = await requireMyCallsAccess();
-  const stats = await fetchCallQueueStats(context);
+  const { session } = await requireMyCallsAccess();
+  const stats = await fetchCallQueueStats();
   const canRetain = canRetainContactsForCalling(session.telepastor.role);
 
   return (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { List, PhoneCall } from "lucide-react";
 import { CallStatsGrid } from "@/components/calls/call-stats-grid";
+import { ReportHeadlineStats } from "@/components/reports/report-headline-stats";
 import { RecentActivityPanel } from "@/components/stats/recent-activity-panel";
 import { ContactsWithNotesCard } from "@/components/stats/contacts-with-notes-card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,18 @@ export function TelepastorDashboard({
           time from your phone.
         </p>
       </div>
+
+      <ReportHeadlineStats
+        stats={{
+          completed: stats.completed,
+          coming: stats.coming,
+          notComing: stats.notComing,
+          wrongNumber: stats.wrongNumber,
+          other: stats.other,
+          totalContacts: stats.assigned,
+        }}
+        size="lg"
+      />
 
       <CallStatsGrid stats={stats} />
 

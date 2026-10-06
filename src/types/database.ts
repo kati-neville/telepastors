@@ -917,6 +917,34 @@ export type Database = {
         };
         Returns: Json;
       };
+      get_my_call_stats: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      get_report_team_performance: {
+        Args: {
+          p_assignee_ids?: string[] | null;
+          p_scope_all?: boolean;
+          p_campaign_id?: string | null;
+          p_response?: string | null;
+          p_from?: string | null;
+          p_to?: string | null;
+        };
+        Returns: Json;
+      };
+      get_report_recent_activity: {
+        Args: {
+          p_assignee_ids?: string[] | null;
+          p_scope_all?: boolean;
+          p_campaign_id?: string | null;
+          p_response?: string | null;
+          p_from?: string | null;
+          p_to?: string | null;
+          p_has_notes?: boolean;
+          p_limit?: number;
+        };
+        Returns: Json;
+      };
       can_record_call_attempt: {
         Args: { target_contact_id: string };
         Returns: boolean;

@@ -32,7 +32,7 @@ export default async function CallQueuePage({ searchParams }: CallQueuePageProps
 
   const [stats, allContacts, initialContact, whatsAppTemplates, defaultTemplate] =
     await Promise.all([
-      fetchCallQueueStats(context),
+      fetchCallQueueStats(),
       fetchAssignedContacts(context, { campaignId }),
       contactId
         ? fetchCallQueueContact(context, contactId)

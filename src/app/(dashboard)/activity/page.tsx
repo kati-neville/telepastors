@@ -7,7 +7,7 @@ import {
   fetchReportFilterOptions,
 } from "@/lib/queries/reports";
 import { getReportScopeLabel } from "@/lib/auth/reports";
-import { reportFilterSchema } from "@/lib/validations/reports";
+import { parseReportSearchParams } from "@/lib/reports/search-params";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -15,31 +15,10 @@ type ActivityPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function getParam(
-  params: Record<string, string | string[] | undefined>,
-  key: string,
-) {
-  const value = params[key];
-  return Array.isArray(value) ? value[0] : value;
-}
-
 export default async function ActivityPage({ searchParams }: ActivityPageProps) {
   const session = await requireAuthSession();
   const context = { telepastor: session.telepastor };
-  const resolvedSearchParams = await searchParams;
-
-  const filters = reportFilterSchema.parse({
-    campaignId: getParam(resolvedSearchParams, "campaignId"),
-    governorId: getParam(resolvedSearchParams, "governorId"),
-    leaderId: getParam(resolvedSearchParams, "leaderId"),
-    telepastorId: getParam(resolvedSearchParams, "telepastorId"),
-    response: getParam(resolvedSearchParams, "response"),
-    from: getParam(resolvedSearchParams, "from"),
-    to: getParam(resolvedSearchParams, "to"),
-    view: getParam(resolvedSearchParams, "view"),
-    hasNotes:
-      getParam(resolvedSearchParams, "hasNotes") === "true" ? "true" : undefined,
-  });
+  const filters = parseReportSearchParams(await searchParams);
 
   const isLeadership = canAccessLeadershipReports(context);
   const role = session.telepastor.role as

@@ -1,4 +1,4 @@
-import { Suspense, cache } from "react";
+import { Suspense } from "react";
 import { Badge } from "@/components/ui/badge";
 import { DistributionQuickAction } from "@/components/assignments/distribution-quick-action";
 import {
@@ -25,12 +25,13 @@ import { fetchCallQueueStats } from "@/lib/queries/calls";
 import { fetchDistributionSummary } from "@/lib/queries/assignments";
 import {
   countContactsWithNotes,
-  fetchLeadershipDashboardExtras,
   fetchLeadershipDashboardShell,
+  fetchLeadershipRecentActivity,
+  fetchTeamPerformanceBundle,
   fetchTelepastorRecentActivity,
 } from "@/lib/queries/reports";
 import { RECENT_ACTIVITY_PREVIEW_LIMIT } from "@/lib/reports/recent-activity-limit";
-import { reportFilterSchema } from "@/lib/validations/reports";
+import { parseReportSearchParams } from "@/lib/reports/search-params";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import type { ReportFilterValues } from "@/lib/validations/reports";
 import type { MinistryRole } from "@/types/domain";
@@ -38,19 +39,6 @@ import type { MinistryRole } from "@/types/domain";
 type DashboardPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-function getParam(
-  params: Record<string, string | string[] | undefined>,
-  key: string,
-) {
-  const value = params[key];
-  return Array.isArray(value) ? value[0] : value;
-}
-
-const getLeadershipExtras = cache(
-  (context: AuthorizationContext, filters: ReportFilterValues) =>
-    fetchLeadershipDashboardExtras(context, filters),
-);
 
 async function DistributionQuickActionSection({
   context,
@@ -77,12 +65,13 @@ async function LeadershipRecentActivitySection({
   context: AuthorizationContext;
   filters: ReportFilterValues;
 }) {
-  const extras = await getLeadershipExtras(context, filters);
+  const activity = await fetchLeadershipRecentActivity(
+    context,
+    filters,
+    RECENT_ACTIVITY_PREVIEW_LIMIT,
+  );
   return (
-    <LeadershipRecentActivity
-      activity={extras.recentActivity}
-      filters={filters}
-    />
+    <LeadershipRecentActivity activity={activity} filters={filters} />
   );
 }
 
@@ -99,10 +88,10 @@ async function LeadershipTeamPerformanceSection({
     ReturnType<typeof fetchLeadershipDashboardShell>
   >["filterOptions"];
 }) {
-  const extras = await getLeadershipExtras(context, filters);
+  const bundle = await fetchTeamPerformanceBundle(context, filters);
   return (
     <LeadershipTeamPerformance
-      bundle={extras.teamPerformanceBundle}
+      bundle={bundle}
       role={role}
       filters={filters}
       filterOptions={filterOptions}
@@ -159,26 +148,11 @@ export default async function DashboardPage({
   const session = await requireAuthSession();
   const { telepastor } = session;
   const context = { telepastor };
-  const resolvedSearchParams = await searchParams;
-
-  const filters = reportFilterSchema.parse({
-    campaignId: getParam(resolvedSearchParams, "campaignId"),
-    governorId: getParam(resolvedSearchParams, "governorId"),
-    leaderId: getParam(resolvedSearchParams, "leaderId"),
-    telepastorId: getParam(resolvedSearchParams, "telepastorId"),
-    response: getParam(resolvedSearchParams, "response"),
-    from: getParam(resolvedSearchParams, "from"),
-    to: getParam(resolvedSearchParams, "to"),
-    view: getParam(resolvedSearchParams, "view"),
-    hasNotes:
-      getParam(resolvedSearchParams, "hasNotes") === "true"
-        ? "true"
-        : undefined,
-  });
+  const filters = parseReportSearchParams(await searchParams);
 
   if (telepastor.role === "TELEPASTOR") {
     const [stats, recentActivity, contactsWithNotesCount] = await Promise.all([
-      fetchCallQueueStats(context),
+      fetchCallQueueStats(),
       fetchTelepastorRecentActivity(
         telepastor.id,
         RECENT_ACTIVITY_PREVIEW_LIMIT,

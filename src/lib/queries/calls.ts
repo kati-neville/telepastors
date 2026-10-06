@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
 import { buildContactSearchFilter } from "@/lib/utils/search";
@@ -20,57 +22,6 @@ function chunkIds(ids: string[], size: number) {
     batches.push(ids.slice(index, index + size));
   }
   return batches;
-}
-
-function emptyStats(): CallQueueStats {
-  return {
-    assigned: 0,
-    completed: 0,
-    remaining: 0,
-    coming: 0,
-    notComing: 0,
-    unreachable: 0,
-    switchedOff: 0,
-    wrongNumber: 0,
-    other: 0,
-  };
-}
-
-function buildStats(contacts: AssignedContact[]): CallQueueStats {
-  const stats = emptyStats();
-  stats.assigned = contacts.length;
-
-  for (const contact of contacts) {
-    if (!contact.latest_response) {
-      stats.remaining += 1;
-      continue;
-    }
-
-    stats.completed += 1;
-
-    switch (contact.latest_response) {
-      case "COMING":
-        stats.coming += 1;
-        break;
-      case "NOT_COMING":
-        stats.notComing += 1;
-        break;
-      case "UNREACHABLE":
-        stats.unreachable += 1;
-        break;
-      case "SWITCHED_OFF":
-        stats.switchedOff += 1;
-        break;
-      case "WRONG_NUMBER":
-        stats.wrongNumber += 1;
-        break;
-      case "OTHER":
-        stats.other += 1;
-        break;
-    }
-  }
-
-  return stats;
 }
 
 async function fetchAssignedContactRows(
@@ -165,14 +116,49 @@ async function enrichAssignedContacts(
   });
 }
 
-export async function fetchCallQueueStats(
-  context: AuthorizationContext,
-): Promise<CallQueueStats> {
-  const contacts = await enrichAssignedContacts(
-    await fetchAssignedContactRows(context.telepastor.id),
-  );
+export type MyCallSummary = {
+  stats: CallQueueStats;
+  contactsWithNotes: number;
+};
 
-  return buildStats(contacts);
+function asCount(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * One aggregate RPC for the signed-in caller's queue. Deduped per request so
+ * the stats + notes count on the same page share a single round-trip.
+ */
+export const fetchMyCallSummary = cache(async (): Promise<MyCallSummary> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_my_call_stats");
+
+  if (error) {
+    throw new Error(formatSupabaseError(error, "Failed to load call stats."));
+  }
+
+  const raw = (data ?? {}) as Record<string, unknown>;
+
+  return {
+    stats: {
+      assigned: asCount(raw.assigned),
+      completed: asCount(raw.completed),
+      remaining: asCount(raw.remaining),
+      coming: asCount(raw.coming),
+      notComing: asCount(raw.notComing),
+      unreachable: asCount(raw.unreachable),
+      switchedOff: asCount(raw.switchedOff),
+      wrongNumber: asCount(raw.wrongNumber),
+      other: asCount(raw.other),
+    },
+    contactsWithNotes: asCount(raw.contactsWithNotes),
+  };
+});
+
+/** Stats for the signed-in caller (the RPC resolves the caller itself). */
+export async function fetchCallQueueStats(): Promise<CallQueueStats> {
+  return (await fetchMyCallSummary()).stats;
 }
 
 export async function fetchAssignedContacts(
