@@ -115,23 +115,18 @@ export function EqualSplitPanel({
 		!isDistributing;
 	const retainOnly = canRetain && distributableCount === 0 && retainCount > 0;
 
-	const updateSplitForRetain = (nextRetainCount: number) => {
-		setRetainCount(nextRetainCount);
-		setCounts(
-			buildEqualSplitCounts(
-				poolContactCount,
-				sortedAssigneeIds,
-				nextRetainCount,
-			),
-		);
-	};
-
 	const handleRetainChange = (value: string) => {
 		const parsed = Number.parseInt(value, 10);
 		const nextRetain = Number.isNaN(parsed)
 			? 0
 			: Math.max(0, Math.min(parsed, poolContactCount));
-		updateSplitForRetain(nextRetain);
+		setRetainCount(nextRetain);
+	};
+
+	const distributeRemainingEvenly = () => {
+		setCounts(
+			buildEqualSplitCounts(poolContactCount, sortedAssigneeIds, retainCount),
+		);
 	};
 
 	const handleCountChange = (assigneeId: string, value: string) => {
@@ -143,7 +138,11 @@ export function EqualSplitPanel({
 	};
 
 	const resetToEqual = () => {
-		updateSplitForRetain(getDefaultRetainCount(poolContactCount, canRetain));
+		const nextRetain = getDefaultRetainCount(poolContactCount, canRetain);
+		setRetainCount(nextRetain);
+		setCounts(
+			buildEqualSplitCounts(poolContactCount, sortedAssigneeIds, nextRetain),
+		);
 	};
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -360,27 +359,19 @@ export function EqualSplitPanel({
 					</CardTitle>
 					<CardDescription>
 						{canRetain
-							? `Keep contacts for your own calls, then split the remaining ${distributableCount} across ${sortedAssignees.length} ${assigneeLabelPlural}.`
+							? `Edit how many contacts to keep for your own calls. Other people's shares stay as they are until you distribute the remaining ${distributableCount} evenly.`
 							: `Split all ${poolContactCount} ready contacts across ${sortedAssignees.length} ${assigneeLabelPlural}. Default share: ${defaultPerAssignee} each, with any remainder assigned in name order.`}
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					<div
-						className={`grid gap-3 ${canRetain ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
+						className={`grid gap-3 ${canRetain ? "sm:grid-cols-2 xl:grid-cols-3" : "sm:grid-cols-3"}`}>
 						<div className="rounded-lg border bg-muted/20 px-4 py-3">
 							<p className="text-xs text-muted-foreground">
 								Contacts in your pool
 							</p>
 							<p className="text-2xl font-semibold">{poolContactCount}</p>
 						</div>
-						{canRetain ? (
-							<div className="rounded-lg border bg-muted/20 px-4 py-3">
-								<p className="text-xs text-muted-foreground">
-									Keep for my calls
-								</p>
-								<p className="text-2xl font-semibold">{retainCount}</p>
-							</div>
-						) : null}
 						<div className="rounded-lg border bg-muted/20 px-4 py-3">
 							<p className="text-xs text-muted-foreground">To distribute</p>
 							<p className="text-2xl font-semibold">{distributableCount}</p>
@@ -394,20 +385,35 @@ export function EqualSplitPanel({
 					</div>
 
 					{canRetain ? (
-						<div className="max-w-xs space-y-2">
+						<div className="space-y-2">
 							<Label htmlFor="retain-count">Keep for my calls</Label>
-							<Input
-								id="retain-count"
-								type="number"
-								min={0}
-								max={poolContactCount}
-								value={retainCount}
-								onChange={event => handleRetainChange(event.target.value)}
-								disabled={isDistributing}
-							/>
+							<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+								<Input
+									id="retain-count"
+									className="max-w-xs"
+									type="number"
+									min={0}
+									max={poolContactCount}
+									value={retainCount}
+									onChange={event => handleRetainChange(event.target.value)}
+									disabled={isDistributing}
+								/>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={distributeRemainingEvenly}
+									disabled={
+										isDistributing ||
+										distributableCount === 0 ||
+										sortedAssignees.length === 0
+									}>
+									<Share2 />
+									Distribute remaining evenly
+								</Button>
+							</div>
 							<p className="text-xs text-muted-foreground">
-								Default is 50. Nothing is kept or assigned until you confirm and
-								distribute.
+								Default is 50. Changing this does not move contacts already
+								shown for other people.
 							</p>
 						</div>
 					) : null}
