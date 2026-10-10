@@ -336,6 +336,26 @@ export async function fetchDistributionPoolContactIds(
 	return contacts.map(contact => contact.id);
 }
 
+export async function fetchHeldForOwnCallContactIds(
+	campaignId: string,
+	actorId: string,
+): Promise<string[]> {
+	const supabase = await createClient();
+
+	const contacts = await fetchAllPages<{ id: string }>(async (from, to) =>
+		supabase
+			.from("contacts")
+			.select("id")
+			.eq("campaign_id", campaignId)
+			.eq("current_assignee_id", actorId)
+			.eq("held_for_own_calls", true)
+			.order("name", { ascending: true })
+			.range(from, to),
+	);
+
+	return contacts.map(contact => contact.id);
+}
+
 export async function fetchContactsByIds(contactIds: string[]) {
 	const supabase = await createClient();
 

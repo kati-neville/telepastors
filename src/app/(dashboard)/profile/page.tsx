@@ -10,11 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { IncompleteProfileBanner } from "@/components/profile/incomplete-profile-banner";
 import { getRoleLabel } from "@/lib/auth/roles";
-import {
-  formatMissingProfileFields,
-  getMissingProfileFields,
-} from "@/lib/profile/completeness";
+import { getMissingProfileFields } from "@/lib/profile/completeness";
 
 export default async function ProfilePage() {
   const { session, telepastor } = await requireProfileAccess();
@@ -32,12 +30,7 @@ export default async function ProfilePage() {
         </p>
       </div>
 
-      {missingFields.length > 0 ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
-          Complete your profile by adding your{" "}
-          {formatMissingProfileFields(missingFields)}.
-        </div>
-      ) : null}
+      <IncompleteProfileBanner missingFields={missingFields} />
 
       <Card>
         <CardHeader>

@@ -13,6 +13,8 @@ import { assignContactToAssignee } from "@/lib/assignments/process-contact-assig
 import { bulkAssignContactsRpc } from "@/lib/assignments/bulk-assign-contacts-rpc";
 import {
 	buildBulkDistributionPlan,
+	chunkPartitionedContacts,
+	DISTRIBUTION_CHUNK_SIZE,
 	type BulkDistributionChunkAssignment,
 } from "@/lib/assignments/bulk-distribution-plan";
 import { validateDistributionTotals } from "@/lib/assignments/distribute-equally";
@@ -37,6 +39,7 @@ import {
 	fetchContactsByIds,
 	fetchDistributionContacts,
 	fetchDistributionPoolContactIds,
+	fetchHeldForOwnCallContactIds,
 	fetchRecentDistributionJobsForActor,
 } from "@/lib/queries/assignments";
 import { fetchCampaignById } from "@/lib/queries/campaigns";
@@ -46,6 +49,7 @@ import {
 	bulkAssignContactsSchema,
 	bulkDistributionChunkSchema,
 	finalizeBulkDistributionSchema,
+	redistributeHeldContactsSchema,
 } from "@/lib/validations/assignments";
 import type { ContactWithAssignee } from "@/types/domain";
 import type { Json } from "@/types/database";
@@ -813,6 +817,119 @@ export async function startDistributionJobAction(
 				chunks,
 				retainedContactIds,
 				byAssignee: assigneeSummary,
+			},
+		})
+		.select("id")
+		.single();
+
+	if (insertError || !job) {
+		return {
+			success: false,
+			error: insertError?.message ?? "Failed to start distribution job.",
+		};
+	}
+
+	after(async () => {
+		await processDistributionJob(job.id);
+		revalidateAssignmentPaths(campaignId);
+	});
+
+	return {
+		success: true,
+		data: { jobId: job.id },
+	};
+}
+
+export async function startHeldContactsDistributionJobAction(
+	values: unknown,
+): Promise<ActionResult<{ jobId: string }>> {
+	const session = await requireAuthSession();
+	const context = { telepastor: session.telepastor };
+
+	if (
+		!canDistributeContacts(context) ||
+		!canRetainContactsForCalling(context.telepastor.role)
+	) {
+		return {
+			success: false,
+			error: "You cannot give out contacts kept for your own calls.",
+		};
+	}
+
+	const parsed = redistributeHeldContactsSchema.safeParse(values);
+	if (!parsed.success) {
+		return {
+			success: false,
+			error:
+				parsed.error.issues[0]?.message ??
+				"Invalid request to give kept contacts.",
+		};
+	}
+
+	const { campaignId, assigneeId, count } = parsed.data;
+
+	const campaign = await fetchCampaignById(campaignId);
+	if (!campaign) {
+		return { success: false, error: "Campaign not found." };
+	}
+
+	const assignee = await fetchAssigneeById(assigneeId);
+	if (!assignee || !assignee.is_active) {
+		return { success: false, error: "Assignee not found or inactive." };
+	}
+
+	if (!canAssignContactToAssignee(context, assignee)) {
+		return {
+			success: false,
+			error: "You cannot assign contacts to this ministry member.",
+		};
+	}
+
+	const heldContactIds = await fetchHeldForOwnCallContactIds(
+		campaignId,
+		session.telepastor.id,
+	);
+
+	if (heldContactIds.length === 0) {
+		return {
+			success: false,
+			error: "You have no contacts kept for your own calls in this campaign.",
+		};
+	}
+
+	if (count > heldContactIds.length) {
+		return {
+			success: false,
+			error: `You can give at most ${heldContactIds.length} kept contact${heldContactIds.length === 1 ? "" : "s"}. Refresh the page to load the latest count.`,
+		};
+	}
+
+	const contactIds = heldContactIds.slice(0, count);
+	const chunks = chunkPartitionedContacts(
+		[{ assigneeId, contactIds }],
+		DISTRIBUTION_CHUNK_SIZE,
+	);
+
+	const supabase = await createClient();
+	const { data: job, error: insertError } = await supabase
+		.from("distribution_jobs")
+		.insert({
+			campaign_id: campaignId,
+			actor_id: session.telepastor.id,
+			status: "pending",
+			retain_count: 0,
+			pool_total: heldContactIds.length,
+			progress_total: contactIds.length,
+			plan: {
+				chunks,
+				retainedContactIds: [],
+				byAssignee: [
+					{
+						assigneeId,
+						name: assignee.name,
+						count: contactIds.length,
+					},
+				],
 			},
 		})
 		.select("id")

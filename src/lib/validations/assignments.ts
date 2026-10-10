@@ -34,6 +34,16 @@ export const bulkAssignContactsSchema = z.object({
 
 export type BulkAssignContactsValues = z.infer<typeof bulkAssignContactsSchema>;
 
+export const redistributeHeldContactsSchema = z.object({
+	campaignId: z.string().uuid(),
+	assigneeId: z.string().uuid(),
+	count: z.number().int().min(1, "Select at least one contact"),
+});
+
+export type RedistributeHeldContactsValues = z.infer<
+	typeof redistributeHeldContactsSchema
+>;
+
 export const bulkDistributionChunkSchema = z.object({
 	campaignId: z.string().uuid(),
 	assignments: z

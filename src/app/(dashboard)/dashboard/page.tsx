@@ -16,6 +16,7 @@ import {
   TeamPerformanceSkeleton,
 } from "@/components/dashboard/leadership-dashboard";
 import { TelepastorDashboard } from "@/components/calls/telepastor-dashboard";
+import { IncompleteProfileBanner } from "@/components/profile/incomplete-profile-banner";
 import { PlaceholderPage } from "@/components/layout/placeholder-page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { canDistributeContacts } from "@/lib/auth/assignments";
@@ -31,6 +32,7 @@ import {
   fetchTelepastorRecentActivity,
 } from "@/lib/queries/reports";
 import { RECENT_ACTIVITY_PREVIEW_LIMIT } from "@/lib/reports/recent-activity-limit";
+import { getMissingProfileFields } from "@/lib/profile/completeness";
 import { parseReportSearchParams } from "@/lib/reports/search-params";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import type { ReportFilterValues } from "@/lib/validations/reports";
@@ -149,6 +151,12 @@ export default async function DashboardPage({
   const { telepastor } = session;
   const context = { telepastor };
   const filters = parseReportSearchParams(await searchParams);
+  const profileBanner = (
+    <IncompleteProfileBanner
+      missingFields={getMissingProfileFields(telepastor)}
+      href="/profile"
+    />
+  );
 
   if (telepastor.role === "TELEPASTOR") {
     const [stats, recentActivity, contactsWithNotesCount] = await Promise.all([
@@ -161,12 +169,15 @@ export default async function DashboardPage({
     ]);
 
     return (
-      <TelepastorDashboard
-        stats={stats}
-        telepastorName={telepastor.name}
-        contactsWithNotesCount={contactsWithNotesCount}
-        recentActivity={recentActivity}
-      />
+      <div className="space-y-6">
+        {profileBanner}
+        <TelepastorDashboard
+          stats={stats}
+          telepastorName={telepastor.name}
+          contactsWithNotesCount={contactsWithNotesCount}
+          recentActivity={recentActivity}
+        />
+      </div>
     );
   }
 
@@ -176,11 +187,14 @@ export default async function DashboardPage({
     telepastor.role === "LEADER"
   ) {
     return (
-      <LeadershipDashboardContent
-        context={context}
-        filters={filters}
-        role={telepastor.role}
-      />
+      <div className="space-y-6">
+        {profileBanner}
+        <LeadershipDashboardContent
+          context={context}
+          filters={filters}
+          role={telepastor.role}
+        />
+      </div>
     );
   }
 
@@ -189,17 +203,20 @@ export default async function DashboardPage({
       title="Dashboard"
       description="Your ministry workspace is ready."
     >
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Signed in as</CardTitle>
-            <CardDescription>{session.loginIdentifier}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="font-medium">{telepastor.name}</p>
-            <Badge variant="secondary">{getRoleLabel(telepastor.role)}</Badge>
-          </CardContent>
-        </Card>
+      <div className="mt-6 space-y-6">
+        {profileBanner}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Signed in as</CardTitle>
+              <CardDescription>{session.loginIdentifier}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="font-medium">{telepastor.name}</p>
+              <Badge variant="secondary">{getRoleLabel(telepastor.role)}</Badge>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </PlaceholderPage>
   );

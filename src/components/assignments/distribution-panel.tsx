@@ -15,6 +15,7 @@ import {
 } from "@/components/assignments/distribution-mode-tabs";
 import { DistributionPoolFilter } from "@/components/assignments/distribution-pool-filter";
 import { EqualSplitPanel } from "@/components/assignments/equal-split-panel";
+import { RedistributeHeldContactsPanel } from "@/components/assignments/redistribute-held-contacts-panel";
 import { NoAssigneesDistributionEmpty } from "@/components/assignments/no-assignees-distribution-empty";
 import { StatCard } from "@/components/stats/stat-card";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,10 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { getAssigneeLabel } from "@/lib/auth/assignments";
+import {
+	canRetainContactsForCalling,
+	getAssigneeLabel,
+} from "@/lib/auth/assignments";
 import { getRoleLabel } from "@/lib/auth/roles";
 import type {
 	ContactWithAssignee,
@@ -87,6 +91,7 @@ export function DistributionPanel({
 	const [contactsError, setContactsError] = useState<string | null>(null);
 	const [contactsRevision, setContactsRevision] = useState(0);
 	const assigneeLabel = getAssigneeLabel(actorRole);
+	const canRetain = canRetainContactsForCalling(actorRole);
 	const assigneeItems = useMemo(
 		() =>
 			assignees.map(assignee => ({
@@ -217,6 +222,15 @@ export function DistributionPanel({
 						<StatCard label="Kept for my calls" value={stats.heldForOwnCalls} />
 					) : null}
 				</div>
+			) : null}
+
+			{canRetain ? (
+				<RedistributeHeldContactsPanel
+					campaignId={campaignId}
+					actorRole={actorRole}
+					heldContactCount={stats.heldForOwnCalls}
+					assignees={assignees}
+				/>
 			) : null}
 
 			<DistributionModeTabs mode={mode} onModeChange={setMode} />
