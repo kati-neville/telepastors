@@ -28,6 +28,7 @@ export function TelepastorsTable({
             <TableHead>Phone</TableHead>
             <TableHead>Address</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead className="text-right">Contacts</TableHead>
             <TableHead>Leader</TableHead>
             <TableHead>Governor</TableHead>
             <TableHead>Status</TableHead>
@@ -55,6 +56,9 @@ export function TelepastorsTable({
               </TableCell>
               <TableCell>
                 <RoleBadge role={telepastor.role} />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {telepastor.assignedContactCount}
               </TableCell>
               <TableCell>{telepastor.leader_name ?? "—"}</TableCell>
               <TableCell>{telepastor.governor_name ?? "—"}</TableCell>

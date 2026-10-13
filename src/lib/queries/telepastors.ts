@@ -1,5 +1,6 @@
 import { getGovernorIdForTelepastor } from "@/lib/auth/roles";
 import { applyTelepastorDirectoryFilters } from "@/lib/telepastors/directory-filters";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import type {
 	MinistryRole,
@@ -19,6 +20,7 @@ export type TelepastorDirectoryCounts = {
 
 function enrichDirectoryEntries(
 	telepastors: Telepastor[],
+	assignedCounts: Map<string, number>,
 ): TelepastorDirectoryEntry[] {
 	const byId = new Map(telepastors.map((entry) => [entry.id, entry]));
 
@@ -35,8 +37,39 @@ function enrichDirectoryEntries(
 			...entry,
 			leader_name: leader?.name ?? null,
 			governor_name: governor?.name ?? null,
+			assignedContactCount: assignedCounts.get(entry.id) ?? 0,
 		};
 	});
+}
+
+async function fetchAssignedContactCountsByAssignee(): Promise<
+	Map<string, number>
+> {
+	const supabase = await createClient();
+	const { data, error } = await supabase.rpc(
+		"get_directory_assigned_contact_counts",
+	);
+
+	if (error) {
+		throw new Error(
+			formatSupabaseError(
+				error,
+				"Failed to load assigned contact counts.",
+			),
+		);
+	}
+
+	const counts = new Map<string, number>();
+
+	for (const row of data ?? []) {
+		if (!row.assignee_id) {
+			continue;
+		}
+
+		counts.set(row.assignee_id, row.assigned_count ?? 0);
+	}
+
+	return counts;
 }
 
 export function countTelepastorDirectory(
@@ -74,16 +107,16 @@ async function fetchVisibleTelepastorsDirectory(): Promise<
 > {
 	const supabase = await createClient();
 
-	const { data, error } = await supabase
-		.from("telepastors")
-		.select("*")
-		.order("name", { ascending: true });
+	const [{ data, error }, assignedCounts] = await Promise.all([
+		supabase.from("telepastors").select("*").order("name", { ascending: true }),
+		fetchAssignedContactCountsByAssignee(),
+	]);
 
 	if (error) {
 		throw new Error(error.message);
 	}
 
-	return enrichDirectoryEntries(data ?? []);
+	return enrichDirectoryEntries(data ?? [], assignedCounts);
 }
 
 export async function fetchTelepastorsDirectory(

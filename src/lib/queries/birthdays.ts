@@ -32,6 +32,7 @@ function enrichBirthdayEntries(telepastors: Telepastor[]): BirthdayEntry[] {
         ...entry,
         leader_name: leader?.name ?? null,
         governor_name: governor?.name ?? null,
+        assignedContactCount: 0,
         birthdayMonth: getBirthdayMonth(entry.date_of_birth),
         birthdayDay: getBirthdayDay(entry.date_of_birth),
         age: calculateAge(entry.date_of_birth),

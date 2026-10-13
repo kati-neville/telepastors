@@ -4,6 +4,7 @@ import type { Database, Json } from "@/types/database";
 import type { MinistryRole } from "@/types/domain";
 
 export const UNDONE_DISTRIBUTION_RECLAIM_NOTE = "__undone_distribution_reclaim__";
+export const UNDO_BLOCKED_HAS_RESPONSE = "has_response";
 
 export type DistributionJobAssigneeSummary = {
   assigneeId: string;
@@ -22,6 +23,8 @@ export type UndoneAssigneeResult = {
   name: string;
   reclaimedCount: number;
   blockedCount: number;
+  keptCalledCount: number;
+  otherBlockedCount: number;
   undoneAt: string;
 };
 
@@ -41,8 +44,74 @@ export type DistributionJobSummary = {
 export type UndoDistributionResult = {
   reclaimedCount: number;
   blockedCount: number;
+  keptCalledCount: number;
+  otherBlockedCount: number;
   blocked: Array<{ contactId: string; reason: string }>;
 };
+
+export function countUndoBlockedByReason(
+  blocked: Array<{ reason: string }>,
+  blockedCount = blocked.length,
+): { keptCalledCount: number; otherBlockedCount: number } {
+  const keptCalledCount = blocked.filter(
+    (entry) => entry.reason === UNDO_BLOCKED_HAS_RESPONSE,
+  ).length;
+
+  return {
+    keptCalledCount,
+    otherBlockedCount: Math.max(0, blockedCount - keptCalledCount),
+  };
+}
+
+export function formatUndoAssigneeSummary(params: {
+  reclaimedCount: number;
+  keptCalledCount: number;
+  otherBlockedCount: number;
+}): string {
+  const parts = [
+    `reclaimed ${params.reclaimedCount} uncalled`,
+  ];
+
+  if (params.keptCalledCount > 0) {
+    parts.push(
+      `kept ${params.keptCalledCount} with responses`,
+    );
+  }
+
+  if (params.otherBlockedCount > 0) {
+    parts.push(
+      `skipped ${params.otherBlockedCount} already moved`,
+    );
+  }
+
+  return parts.join(", ");
+}
+
+function asUndoneAssigneeResult(
+  row: Record<string, unknown>,
+  fallbackId = "",
+): UndoneAssigneeResult | null {
+  const assigneeId = String(row.assigneeId ?? fallbackId);
+  if (!assigneeId) {
+    return null;
+  }
+
+  const blockedCount = Number(row.blockedCount ?? 0);
+  const keptCalledCount = Number(row.keptCalledCount ?? 0);
+  const otherBlockedCount = Number(
+    row.otherBlockedCount ?? Math.max(0, blockedCount - keptCalledCount),
+  );
+
+  return {
+    assigneeId,
+    name: String(row.name ?? "Unknown"),
+    reclaimedCount: Number(row.reclaimedCount ?? 0),
+    blockedCount,
+    keptCalledCount,
+    otherBlockedCount,
+    undoneAt: String(row.undoneAt ?? ""),
+  };
+}
 
 function asAssigneeSummary(value: unknown): DistributionJobAssigneeSummary[] {
   if (!Array.isArray(value)) {
@@ -76,18 +145,7 @@ function asUndoneAssignees(value: unknown): UndoneAssigneeResult[] {
       if (!entry || typeof entry !== "object") {
         return null;
       }
-      const row = entry as Record<string, unknown>;
-      const assigneeId = String(row.assigneeId ?? "");
-      if (!assigneeId) {
-        return null;
-      }
-      return {
-        assigneeId,
-        name: String(row.name ?? "Unknown"),
-        reclaimedCount: Number(row.reclaimedCount ?? 0),
-        blockedCount: Number(row.blockedCount ?? 0),
-        undoneAt: String(row.undoneAt ?? ""),
-      };
+      return asUndoneAssigneeResult(entry as Record<string, unknown>);
     })
     .filter((entry): entry is UndoneAssigneeResult => Boolean(entry));
 }
@@ -135,13 +193,10 @@ export function parseUndoResultPayload(value: Json | null | undefined): {
     if (!entry || typeof entry !== "object") continue;
     const item = entry as Record<string, unknown>;
     const assigneeId = String(item.assigneeId ?? key);
-    byAssignee[assigneeId] = {
-      assigneeId,
-      name: String(item.name ?? "Unknown"),
-      reclaimedCount: Number(item.reclaimedCount ?? 0),
-      blockedCount: Number(item.blockedCount ?? 0),
-      undoneAt: String(item.undoneAt ?? ""),
-    };
+    const parsed = asUndoneAssigneeResult(item, assigneeId);
+    if (parsed) {
+      byAssignee[assigneeId] = parsed;
+    }
   }
 
   // Legacy whole-job undo payload without byAssignee — treat as fully undone.
@@ -216,7 +271,13 @@ export async function reclaimDistributionContacts(
   if (items.length === 0) {
     return {
       success: true,
-      data: { reclaimedCount: 0, blockedCount: 0, blocked: [] },
+      data: {
+        reclaimedCount: 0,
+        blockedCount: 0,
+        keptCalledCount: 0,
+        otherBlockedCount: 0,
+        blocked: [],
+      },
     };
   }
 
@@ -271,8 +332,19 @@ export async function reclaimDistributionContacts(
     }
   }
 
+  const { keptCalledCount, otherBlockedCount } = countUndoBlockedByReason(
+    blocked,
+    blockedCount,
+  );
+
   return {
     success: true,
-    data: { reclaimedCount, blockedCount, blocked },
+    data: {
+      reclaimedCount,
+      blockedCount,
+      keptCalledCount,
+      otherBlockedCount,
+      blocked,
+    },
   };
 }

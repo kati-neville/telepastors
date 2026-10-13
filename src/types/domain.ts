@@ -38,6 +38,7 @@ export type TelepastorSummary = Pick<
 export type TelepastorDirectoryEntry = Telepastor & {
   leader_name: string | null;
   governor_name: string | null;
+  assignedContactCount: number;
 };
 
 export type BirthdayEntry = TelepastorDirectoryEntry & {

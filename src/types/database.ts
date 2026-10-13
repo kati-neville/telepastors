@@ -906,6 +906,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      mark_contacts_held_for_own_calls: {
+        Args: {
+          p_campaign_id: string;
+          p_actor_id: string;
+          p_contact_ids: string[];
+        };
+        Returns: Json;
+      };
       get_leadership_dashboard_stats: {
         Args: {
           p_assignee_ids?: string[] | null;
@@ -920,6 +928,13 @@ export type Database = {
       get_my_call_stats: {
         Args: Record<string, never>;
         Returns: Json;
+      };
+      get_directory_assigned_contact_counts: {
+        Args: Record<string, never>;
+        Returns: {
+          assignee_id: string;
+          assigned_count: number;
+        }[];
       };
       get_report_team_performance: {
         Args: {

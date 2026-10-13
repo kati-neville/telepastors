@@ -43,6 +43,7 @@ import {
 	fetchRecentDistributionJobsForActor,
 } from "@/lib/queries/assignments";
 import { fetchCampaignById } from "@/lib/queries/campaigns";
+import { formatSupabaseError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import {
 	assignContactsSchema,
@@ -825,7 +826,10 @@ export async function startDistributionJobAction(
 	if (insertError || !job) {
 		return {
 			success: false,
-			error: insertError?.message ?? "Failed to start distribution job.",
+			error: formatSupabaseError(
+				insertError,
+				"Failed to start distribution job.",
+			),
 		};
 	}
 
@@ -938,7 +942,10 @@ export async function startHeldContactsDistributionJobAction(
 	if (insertError || !job) {
 		return {
 			success: false,
-			error: insertError?.message ?? "Failed to start distribution job.",
+			error: formatSupabaseError(
+				insertError,
+				"Failed to start distribution job.",
+			),
 		};
 	}
 
@@ -1045,6 +1052,8 @@ export async function undoDistributionJobAction(
 	ActionResult<{
 		reclaimedCount: number;
 		blockedCount: number;
+		keptCalledCount: number;
+		otherBlockedCount: number;
 		assigneeId: string;
 		job: DistributionJobSummary;
 	}>
@@ -1146,11 +1155,15 @@ export async function undoDistributionJobAction(
 	}
 
 	const undoneAt = new Date().toISOString();
+	const { reclaimedCount, blockedCount, keptCalledCount, otherBlockedCount } =
+		reclaimResult.data;
 	const assigneeUndo: UndoneAssigneeResult = {
 		assigneeId,
 		name: assigneeName,
-		reclaimedCount: reclaimResult.data.reclaimedCount,
-		blockedCount: reclaimResult.data.blockedCount,
+		reclaimedCount,
+		blockedCount,
+		keptCalledCount,
+		otherBlockedCount,
 		undoneAt,
 	};
 
@@ -1212,8 +1225,10 @@ export async function undoDistributionJobAction(
 					jobId,
 					assigneeId,
 					assigneeName,
-					reclaimedCount: reclaimResult.data.reclaimedCount,
-					blockedCount: reclaimResult.data.blockedCount,
+					reclaimedCount,
+					blockedCount,
+					keptCalledCount,
+					otherBlockedCount,
 					mode,
 					statusUpdateSkipped: true,
 				},
@@ -1224,8 +1239,10 @@ export async function undoDistributionJobAction(
 			return {
 				success: true,
 				data: {
-					reclaimedCount: reclaimResult.data.reclaimedCount,
-					blockedCount: reclaimResult.data.blockedCount,
+					reclaimedCount,
+					blockedCount,
+					keptCalledCount,
+					otherBlockedCount,
 					assigneeId,
 					job: mapDistributionJobRow({
 						...job,
@@ -1256,8 +1273,10 @@ export async function undoDistributionJobAction(
 			jobId,
 			assigneeId,
 			assigneeName,
-			reclaimedCount: reclaimResult.data.reclaimedCount,
-			blockedCount: reclaimResult.data.blockedCount,
+			reclaimedCount,
+			blockedCount,
+			keptCalledCount,
+			otherBlockedCount,
 			mode,
 			fullyUndone: allAssigneesUndone,
 		},
@@ -1268,8 +1287,10 @@ export async function undoDistributionJobAction(
 	return {
 		success: true,
 		data: {
-			reclaimedCount: reclaimResult.data.reclaimedCount,
-			blockedCount: reclaimResult.data.blockedCount,
+			reclaimedCount,
+			blockedCount,
+			keptCalledCount,
+			otherBlockedCount,
 			assigneeId,
 			job: mapDistributionJobRow(updatedJob),
 		},

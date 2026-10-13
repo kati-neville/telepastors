@@ -37,6 +37,10 @@ export function TelepastorMemberCards({
                 <p className="line-clamp-2 text-sm text-muted-foreground">
                   {telepastor.address ?? "No address provided"}
                 </p>
+                <p className="text-sm tabular-nums text-muted-foreground">
+                  {telepastor.assignedContactCount} contact
+                  {telepastor.assignedContactCount === 1 ? "" : "s"}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   <RoleBadge role={telepastor.role} />
                   <ActiveStatusBadge isActive={telepastor.is_active} />

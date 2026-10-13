@@ -8,7 +8,10 @@ import {
 	listCampaignDistributionJobsAction,
 	undoDistributionJobAction,
 } from "@/app/actions/assignments";
-import type { DistributionJobSummary } from "@/lib/assignments/undo-distribution";
+import {
+	formatUndoAssigneeSummary,
+	type DistributionJobSummary,
+} from "@/lib/assignments/undo-distribution";
 import { Button } from "@/components/ui/button";
 import {
 	AlertDialog,
@@ -95,12 +98,16 @@ export function DistributionHistoryPanel({
 			}
 
 			const reclaimed = result.data?.reclaimedCount ?? 0;
-			const blocked = result.data?.blockedCount ?? 0;
+			const keptCalled = result.data?.keptCalledCount ?? 0;
+			const otherBlocked = result.data?.otherBlockedCount ?? 0;
+			const summary = formatUndoAssigneeSummary({
+				reclaimedCount: reclaimed,
+				keptCalledCount: keptCalled,
+				otherBlockedCount: otherBlocked,
+			});
 
 			toast.success(
-				blocked > 0
-					? `Reclaimed ${reclaimed} contact${reclaimed === 1 ? "" : "s"} from ${assigneeName}. ${blocked} could not be undone (already redistributed).`
-					: `Reclaimed ${reclaimed} contact${reclaimed === 1 ? "" : "s"} from ${assigneeName}.`,
+				`Undo for ${assigneeName}: ${summary}.`,
 			);
 
 			setJobs(current =>
@@ -191,10 +198,12 @@ export function DistributionHistoryPanel({
 													<p className="font-medium">{assignee.name}</p>
 													{undone ? (
 														<p className="text-xs text-muted-foreground">
-															Undone · reclaimed {undone.reclaimedCount}
-															{undone.blockedCount > 0
-																? `, blocked ${undone.blockedCount}`
-																: ""}
+															Undone ·{" "}
+															{formatUndoAssigneeSummary({
+																reclaimedCount: undone.reclaimedCount,
+																keptCalledCount: undone.keptCalledCount,
+																otherBlockedCount: undone.otherBlockedCount,
+															})}
 														</p>
 													) : null}
 												</div>
@@ -229,11 +238,12 @@ export function DistributionHistoryPanel({
 																		Undo distribution to {assignee.name}?
 																	</AlertDialogTitle>
 																	<AlertDialogDescription>
-																		Only contacts still held by {assignee.name}{" "}
-																		from this distribution will return to your
-																		pool. Other {assigneeLabel.toLowerCase()}s
-																		are not affected. Contacts already
-																		redistributed further will be skipped.
+																		Only contacts {assignee.name} has not
+																		called will return to your pool. Contacts
+																		with a call response stay with them. Other{" "}
+																		{assigneeLabel.toLowerCase()}s are not
+																		affected. Contacts already redistributed
+																		further will be skipped.
 																	</AlertDialogDescription>
 																</AlertDialogHeader>
 																<AlertDialogFooter>
