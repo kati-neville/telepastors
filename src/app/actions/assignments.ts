@@ -18,9 +18,17 @@ import {
 	type BulkDistributionChunkAssignment,
 } from "@/lib/assignments/bulk-distribution-plan";
 import { validateDistributionTotals } from "@/lib/assignments/distribute-equally";
+import type { CampaignAssigneeUndoRow } from "@/lib/assignments/assignee-undo";
+import {
+	classifyContactsCalledStatus,
+	partitionContactsByCalledStatus,
+	summarizeUndoAssigneePreview,
+	type UndoAssigneePreviewCounts,
+} from "@/lib/assignments/called-contacts";
 import { markContactsHeldForOwnCalls } from "@/lib/assignments/retain-for-calling";
 import { processDistributionJob } from "@/lib/assignments/process-distribution-job";
 import {
+	buildJobUndoUpdateForAssignee,
 	flattenDistributionPlanItems,
 	getUndoModeForRole,
 	mapDistributionJobRow,
@@ -36,6 +44,8 @@ import { requireAuthSession } from "@/lib/auth/session";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import {
 	fetchAssigneeById,
+	fetchCampaignAssigneeUndoRows,
+	fetchContactsAssignedByActor,
 	fetchContactsByIds,
 	fetchDistributionContacts,
 	fetchDistributionPoolContactIds,
@@ -276,6 +286,19 @@ export async function assignContactsAction(
 	}
 
 	const supabase = await createClient();
+	const calledPartition = await partitionContactsByCalledStatus(
+		supabase,
+		contactIds,
+	);
+
+	if (calledPartition.calledIds.length > 0) {
+		return {
+			success: false,
+			error:
+				"Contacts with call attempts or saved responses stay with you and cannot be assigned.",
+		};
+	}
+
 	let assignedCount = 0;
 	let reassignedCount = 0;
 
@@ -892,6 +915,7 @@ export async function startHeldContactsDistributionJobAction(
 	const heldContactIds = await fetchHeldForOwnCallContactIds(
 		campaignId,
 		session.telepastor.id,
+		{ uncalledOnly: true },
 	);
 
 	if (heldContactIds.length === 0) {
@@ -1011,6 +1035,40 @@ export async function getDistributionJobStatusAction(jobId: string): Promise<
 	};
 }
 
+export async function listCampaignAssigneeUndoRowsAction(
+	campaignId: string,
+): Promise<ActionResult<CampaignAssigneeUndoRow[]>> {
+	const session = await requireAuthSession();
+	const context = { telepastor: session.telepastor };
+
+	if (!canDistributeContacts(context)) {
+		return {
+			success: false,
+			error: "You are not allowed to view distributions.",
+		};
+	}
+
+	if (!campaignId.trim()) {
+		return { success: false, error: "Campaign is required." };
+	}
+
+	try {
+		const rows = await fetchCampaignAssigneeUndoRows(
+			campaignId,
+			session.telepastor.id,
+		);
+		return { success: true, data: rows };
+	} catch (error) {
+		return {
+			success: false,
+			error:
+				error instanceof Error && error.message.trim()
+					? error.message
+					: "Failed to load assigned people.",
+		};
+	}
+}
+
 export async function listCampaignDistributionJobsAction(
 	campaignId: string,
 ): Promise<ActionResult<DistributionJobSummary[]>> {
@@ -1043,6 +1101,272 @@ export async function listCampaignDistributionJobsAction(
 					: "Failed to load distribution history.",
 		};
 	}
+}
+
+export async function previewUndoAssigneeAction(
+	campaignId: string,
+	assigneeId: string,
+): Promise<ActionResult<UndoAssigneePreviewCounts>> {
+	const session = await requireAuthSession();
+	const context = { telepastor: session.telepastor };
+
+	if (!canDistributeContacts(context)) {
+		return {
+			success: false,
+			error: "You are not allowed to undo assignments.",
+		};
+	}
+
+	if (!campaignId.trim() || !assigneeId.trim()) {
+		return { success: false, error: "Campaign and assignee are required." };
+	}
+
+	const supabase = await createClient();
+	const contacts = await fetchContactsAssignedByActor(
+		campaignId,
+		session.telepastor.id,
+		assigneeId,
+	);
+	const preview = summarizeUndoAssigneePreview(
+		contacts.map(contact => contact.id),
+		assigneeId,
+		await classifyContactsCalledStatus(
+			supabase,
+			contacts.map(contact => contact.id),
+		),
+	);
+
+	return { success: true, data: preview };
+}
+
+export async function undoAssigneeAssignmentsAction(
+	campaignId: string,
+	assigneeId: string,
+): Promise<
+	ActionResult<{
+		reclaimedCount: number;
+		blockedCount: number;
+		keptCalledCount: number;
+		otherBlockedCount: number;
+		assigneeId: string;
+	}>
+> {
+	const session = await requireAuthSession();
+	const context = { telepastor: session.telepastor };
+
+	if (!canDistributeContacts(context)) {
+		return {
+			success: false,
+			error: "You are not allowed to undo assignments.",
+		};
+	}
+
+	if (!campaignId.trim() || !assigneeId.trim()) {
+		return { success: false, error: "Campaign and assignee are required." };
+	}
+
+	const assignee = await fetchAssigneeById(assigneeId);
+	if (!assignee) {
+		return { success: false, error: "Assignee not found." };
+	}
+
+	const supabase = await createClient();
+	const contacts = await fetchContactsAssignedByActor(
+		campaignId,
+		session.telepastor.id,
+		assigneeId,
+	);
+
+	if (contacts.length === 0) {
+		return {
+			success: false,
+			error: "That person has no contacts assigned from you in this campaign.",
+		};
+	}
+
+	const mode = getUndoModeForRole(session.telepastor.role);
+	const reclaimResult = await reclaimDistributionContacts(supabase, {
+		campaignId,
+		actorId: session.telepastor.id,
+		mode,
+		items: contacts.map(contact => ({
+			contact_id: contact.id,
+			expected_assignee_id: assigneeId,
+		})),
+	});
+
+	if (!reclaimResult.success) {
+		return { success: false, error: reclaimResult.error };
+	}
+
+	const undoneAt = new Date().toISOString();
+	const { reclaimedCount, blockedCount, keptCalledCount, otherBlockedCount } =
+		reclaimResult.data;
+	const assigneeUndo: UndoneAssigneeResult = {
+		assigneeId,
+		name: assignee.name,
+		reclaimedCount,
+		blockedCount,
+		keptCalledCount,
+		otherBlockedCount,
+		undoneAt,
+	};
+
+	try {
+		const jobs = await fetchRecentDistributionJobsForActor(
+			campaignId,
+			session.telepastor.id,
+			100,
+		);
+
+		for (const job of jobs) {
+			if (job.status !== "completed") {
+				continue;
+			}
+
+			const jobRow = await supabase
+				.from("distribution_jobs")
+				.select("id, result, undo_result, status")
+				.eq("id", job.id)
+				.maybeSingle();
+
+			if (jobRow.error || !jobRow.data) {
+				continue;
+			}
+
+			const update = buildJobUndoUpdateForAssignee({
+				result: jobRow.data.result,
+				undoResult: jobRow.data.undo_result,
+				assigneeUndo,
+				mode,
+			});
+
+			if (!update.shouldUpdate) {
+				continue;
+			}
+
+			const updatePayload: {
+				undo_result: Json;
+				status?: "undone";
+				undone_at?: string;
+			} = {
+				undo_result: update.undoResultPayload as unknown as Json,
+			};
+
+			if (update.allAssigneesUndone) {
+				updatePayload.status = "undone";
+				updatePayload.undone_at = undoneAt;
+			}
+
+			await supabase
+				.from("distribution_jobs")
+				.update(updatePayload)
+				.eq("id", job.id)
+				.eq("actor_id", session.telepastor.id)
+				.eq("status", "completed");
+		}
+	} catch {
+		// Reclaim already succeeded; job history is bookkeeping only.
+	}
+
+	await recordAuditEvent({
+		actorId: session.telepastor.id,
+		action: AUDIT_ACTIONS.CONTACTS_DISTRIBUTION_UNDONE,
+		entityType: "campaign",
+		entityId: campaignId,
+		metadata: {
+			assigneeId,
+			assigneeName: assignee.name,
+			reclaimedCount,
+			blockedCount,
+			keptCalledCount,
+			otherBlockedCount,
+			mode,
+			scope: "assignee",
+		},
+	});
+
+	revalidateAssignmentPaths(campaignId);
+
+	return {
+		success: true,
+		data: {
+			reclaimedCount,
+			blockedCount,
+			keptCalledCount,
+			otherBlockedCount,
+			assigneeId,
+		},
+	};
+}
+
+export async function previewUndoDistributionAssigneeAction(
+	jobId: string,
+	assigneeId: string,
+): Promise<ActionResult<UndoAssigneePreviewCounts>> {
+	const session = await requireAuthSession();
+	const context = { telepastor: session.telepastor };
+
+	if (!canDistributeContacts(context)) {
+		return {
+			success: false,
+			error: "You are not allowed to undo distributions.",
+		};
+	}
+
+	if (!jobId.trim()) {
+		return { success: false, error: "Distribution job is required." };
+	}
+
+	if (!assigneeId.trim()) {
+		return { success: false, error: "Assignee is required." };
+	}
+
+	const supabase = await createClient();
+	const { data: job, error } = await supabase
+		.from("distribution_jobs")
+		.select("*")
+		.eq("id", jobId)
+		.maybeSingle();
+
+	if (error) {
+		return { success: false, error: error.message };
+	}
+
+	if (!job || job.actor_id !== session.telepastor.id) {
+		return {
+			success: false,
+			error: "Only the person who ran this distribution can undo it.",
+		};
+	}
+
+	if (job.status !== "completed") {
+		return {
+			success: false,
+			error: "Only completed distributions can be previewed for undo.",
+		};
+	}
+
+	const existingUndo = parseUndoResultPayload(job.undo_result);
+	if (existingUndo.byAssignee[assigneeId]) {
+		return {
+			success: false,
+			error: "That assignee's share of this distribution was already undone.",
+		};
+	}
+
+	const plan = (job.plan ?? {}) as DistributionJobPlan;
+	const items = flattenDistributionPlanItems(plan, assigneeId);
+	const preview = summarizeUndoAssigneePreview(
+		items.map(item => item.contact_id),
+		assigneeId,
+		await classifyContactsCalledStatus(
+			supabase,
+			items.map(item => item.contact_id),
+		),
+	);
+
+	return { success: true, data: preview };
 }
 
 export async function undoDistributionJobAction(

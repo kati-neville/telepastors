@@ -13,6 +13,7 @@ import { toActionErrorMessage } from "@/lib/errors/client-message";
 import {
   fetchAssignedContactById,
   fetchCallQueueStats,
+  fetchNextQueueContact,
 } from "@/lib/queries/calls";
 import { createClient } from "@/lib/supabase/server";
 import { recordCallAttemptSchema } from "@/lib/validations/calls";
@@ -129,15 +130,10 @@ export async function recordCallAttemptAction(
     },
   });
 
-  const stats = await fetchCallQueueStats();
-  const remainingContacts = await supabase
-    .from("contacts")
-    .select("id")
-    .eq("current_assignee_id", session.telepastor.id)
-    .is("latest_response", null)
-    .neq("id", contact.id)
-    .order("name", { ascending: true })
-    .limit(1);
+  const [stats, nextContact] = await Promise.all([
+    fetchCallQueueStats(),
+    fetchNextQueueContact(context, { skipContactIds: [contact.id] }),
+  ]);
 
   revalidateCallPaths();
 
@@ -145,7 +141,7 @@ export async function recordCallAttemptAction(
     success: true,
     data: {
       attemptId: attempt.id,
-      nextContactId: remainingContacts.data?.[0]?.id ?? null,
+      nextContactId: nextContact?.id ?? null,
       stats,
     },
   };

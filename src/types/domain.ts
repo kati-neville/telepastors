@@ -156,7 +156,9 @@ export type DistributionStats = {
   assigned: number;
   unassigned: number;
   assignedToMe: number;
+  calledStayingWithYou: number;
   heldForOwnCalls: number;
+  heldUncalledCount: number;
 };
 
 export type ContactImportStatus = "PREVIEW" | "COMPLETED" | "FAILED" | "CANCELLED";

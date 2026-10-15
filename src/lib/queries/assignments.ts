@@ -1,8 +1,17 @@
 import { getDistributionPoolFilter } from "@/lib/auth/assignments";
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import {
+	aggregateAssigneeUndoRows,
+	type CampaignAssigneeUndoRow,
+} from "@/lib/assignments/assignee-undo";
+import {
+	classifyContactsCalledStatus,
+	partitionContactsByCalledStatus,
+} from "@/lib/assignments/called-contacts";
+import {
 	countDistributionPoolContactsForCampaign,
 	fetchDistributionPoolContactsForCampaign,
+	partitionDistributionPoolContactsForCampaign,
 } from "@/lib/assignments/fetch-distribution-pool";
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
@@ -80,31 +89,17 @@ export async function fetchDistributionStats(
 	if (pool === "assigned_to_self") {
 		const actorId = context.telepastor.id;
 
-		const [assignedToMe, heldResult, assignedToActorResult] = await Promise.all(
-			[
-				countDistributionPoolContactsForCampaign(campaignId, context),
-				supabase
-					.from("contacts")
-					.select("id", { count: "exact", head: true })
-					.eq("campaign_id", campaignId)
-					.eq("current_assignee_id", actorId)
-					.eq("held_for_own_calls", true),
-				supabase
-					.from("contacts")
-					.select("id", { count: "exact", head: true })
-					.eq("campaign_id", campaignId)
-					.eq("current_assignee_id", actorId),
-			],
-		);
-
-		if (heldResult.error) {
-			throw new Error(
-				formatSupabaseError(
-					heldResult.error,
-					"Failed to load held-for-calls count.",
-				),
-			);
-		}
+		const [poolPartition, heldIds, assignedToActorResult] = await Promise.all([
+			partitionDistributionPoolContactsForCampaign(campaignId, context),
+			fetchHeldForOwnCallContactIds(campaignId, actorId, {
+				uncalledOnly: false,
+			}),
+			supabase
+				.from("contacts")
+				.select("id", { count: "exact", head: true })
+				.eq("campaign_id", campaignId)
+				.eq("current_assignee_id", actorId),
+		]);
 
 		if (assignedToActorResult.error) {
 			throw new Error(
@@ -115,14 +110,20 @@ export async function fetchDistributionStats(
 			);
 		}
 
+		const heldPartition = await partitionContactsByCalledStatus(
+			supabase,
+			heldIds,
+		);
 		const assignedToActor = assignedToActorResult.count ?? 0;
 
 		return {
 			total: assignedToActor,
 			assigned: assignedToActor,
 			unassigned: 0,
-			assignedToMe,
-			heldForOwnCalls: heldResult.count ?? 0,
+			assignedToMe: poolPartition.uncalledIds.length,
+			calledStayingWithYou: poolPartition.calledIds.length,
+			heldForOwnCalls: heldIds.length,
+			heldUncalledCount: heldPartition.uncalledIds.length,
 		};
 	}
 
@@ -130,7 +131,7 @@ export async function fetchDistributionStats(
 		{ count: total, error: totalError },
 		{ count: assigned, error: assignedError },
 		{ count: unassigned, error: unassignedError },
-		assignedToMe,
+		poolPartition,
 	] = await Promise.all([
 		supabase
 			.from("contacts")
@@ -146,7 +147,7 @@ export async function fetchDistributionStats(
 			.select("id", { count: "exact", head: true })
 			.eq("campaign_id", campaignId)
 			.eq("assignment_status", "UNASSIGNED"),
-		countDistributionPoolContactsForCampaign(campaignId, context),
+		partitionDistributionPoolContactsForCampaign(campaignId, context),
 	]);
 
 	if (totalError || assignedError || unassignedError) {
@@ -162,8 +163,10 @@ export async function fetchDistributionStats(
 		total: total ?? 0,
 		assigned: assigned ?? 0,
 		unassigned: unassigned ?? 0,
-		assignedToMe,
+		assignedToMe: poolPartition.uncalledIds.length,
+		calledStayingWithYou: poolPartition.calledIds.length,
 		heldForOwnCalls: 0,
+		heldUncalledCount: 0,
 	};
 }
 
@@ -214,6 +217,18 @@ export async function fetchDistributionContacts(
 		);
 		const poolIds = new Set(poolContacts.map(contact => contact.id));
 		visibleContacts = contacts.filter(contact => poolIds.has(contact.id));
+	} else {
+		const unassignedIds = visibleContacts
+			.filter(contact => contact.assignment_status === "UNASSIGNED")
+			.map(contact => contact.id);
+		const partition = await partitionContactsByCalledStatus(
+			supabase,
+			unassignedIds,
+		);
+		const calledIds = new Set(partition.calledIds);
+		visibleContacts = visibleContacts.filter(
+			contact => !calledIds.has(contact.id),
+		);
 	}
 
 	const assigneeIds = [
@@ -339,6 +354,7 @@ export async function fetchDistributionPoolContactIds(
 export async function fetchHeldForOwnCallContactIds(
 	campaignId: string,
 	actorId: string,
+	options?: { uncalledOnly?: boolean },
 ): Promise<string[]> {
 	const supabase = await createClient();
 
@@ -353,7 +369,14 @@ export async function fetchHeldForOwnCallContactIds(
 			.range(from, to),
 	);
 
-	return contacts.map(contact => contact.id);
+	const heldIds = contacts.map(contact => contact.id);
+
+	if (!options?.uncalledOnly || heldIds.length === 0) {
+		return heldIds;
+	}
+
+	const partition = await partitionContactsByCalledStatus(supabase, heldIds);
+	return partition.uncalledIds;
 }
 
 export async function fetchContactsByIds(contactIds: string[]) {
@@ -531,4 +554,124 @@ export async function fetchRecentDistributionJobsForActor(
 	const { mapDistributionJobRow } =
 		await import("@/lib/assignments/undo-distribution");
 	return (data ?? []).map(mapDistributionJobRow);
+}
+
+type ActorAssignedContactRow = {
+	id: string;
+	current_assignee_id: string | null;
+	contact_assignments:
+		| { assigned_by: string | null }
+		| { assigned_by: string | null }[]
+		| null;
+};
+
+function assignmentAssignedBy(
+	assignment: ActorAssignedContactRow["contact_assignments"],
+): string | null {
+	if (!assignment) {
+		return null;
+	}
+
+	if (Array.isArray(assignment)) {
+		return assignment[0]?.assigned_by ?? null;
+	}
+
+	return assignment.assigned_by;
+}
+
+export async function fetchContactsAssignedByActor(
+	campaignId: string,
+	actorId: string,
+	assigneeId?: string,
+): Promise<Array<{ id: string; assigneeId: string }>> {
+	const supabase = await createClient();
+
+	const rows = await fetchAllPages<ActorAssignedContactRow>(async (from, to) => {
+		let query = supabase
+			.from("contacts")
+			.select(
+				`
+        id,
+        current_assignee_id,
+        contact_assignments!contacts_current_assignment_id_fkey!inner (
+          assigned_by
+        )
+      `,
+			)
+			.eq("campaign_id", campaignId)
+			.not("current_assignee_id", "is", null)
+			.neq("current_assignee_id", actorId)
+			.eq("contact_assignments.assigned_by", actorId)
+			.order("name", { ascending: true })
+			.range(from, to);
+
+		if (assigneeId) {
+			query = query.eq("current_assignee_id", assigneeId);
+		}
+
+		return query;
+	});
+
+	return rows.flatMap(row => {
+		if (!row.current_assignee_id) {
+			return [];
+		}
+
+		if (assignmentAssignedBy(row.contact_assignments) !== actorId) {
+			return [];
+		}
+
+		return [{ id: row.id, assigneeId: row.current_assignee_id }];
+	});
+}
+
+export async function fetchCampaignAssigneeUndoRows(
+	campaignId: string,
+	actorId: string,
+): Promise<CampaignAssigneeUndoRow[]> {
+	const supabase = await createClient();
+	const contacts = await fetchContactsAssignedByActor(campaignId, actorId);
+
+	if (contacts.length === 0) {
+		return [];
+	}
+
+	const calledRows = await classifyContactsCalledStatus(
+		supabase,
+		contacts.map(contact => contact.id),
+	);
+	const calledById = new Map(
+		calledRows.map(row => [row.contactId, row.isCalled]),
+	);
+	const assigneeIds = [...new Set(contacts.map(contact => contact.assigneeId))];
+
+	const { data: people, error } = await supabase
+		.from("telepastors")
+		.select("id, name, role")
+		.in("id", assigneeIds);
+
+	if (error) {
+		throw new Error(
+			formatSupabaseError(error, "Failed to load assignee names."),
+		);
+	}
+
+	const peopleById = new Map(
+		(people ?? []).map(person => [
+			person.id,
+			{
+				name: person.name,
+				role: person.role as MinistryRole,
+			},
+		]),
+	);
+
+	return aggregateAssigneeUndoRows(
+		contacts.map(contact => ({
+			contactId: contact.id,
+			assigneeId: contact.assigneeId,
+			isCalled: calledById.get(contact.id) ?? false,
+		})),
+		peopleById,
+	);
 }

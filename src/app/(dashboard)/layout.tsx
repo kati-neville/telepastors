@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   const navItems = getVisibleNavItems(context);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-full max-h-full min-h-0 overflow-hidden">
       <AppSidebar
         items={navItems}
         telepastor={session.telepastor}
@@ -27,7 +27,7 @@ export default async function DashboardLayout({
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader session={session} navItems={navItems} />
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-24 md:px-8 md:pb-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 pb-24 md:px-8 md:pb-8">
           <Suspense fallback={<BirthdayNoticeBannerFallback />}>
             <BirthdayNoticeBannerLoader context={context} />
           </Suspense>

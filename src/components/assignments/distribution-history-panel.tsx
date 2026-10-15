@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Undo2 } from "lucide-react";
+import { Loader2, Search, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-	listCampaignDistributionJobsAction,
-	undoDistributionJobAction,
+	listCampaignAssigneeUndoRowsAction,
+	previewUndoAssigneeAction,
+	undoAssigneeAssignmentsAction,
 } from "@/app/actions/assignments";
-import {
-	formatUndoAssigneeSummary,
-	type DistributionJobSummary,
-} from "@/lib/assignments/undo-distribution";
+import type { CampaignAssigneeUndoRow } from "@/lib/assignments/assignee-undo";
+import type { UndoAssigneePreviewCounts } from "@/lib/assignments/called-contacts";
+import { formatUndoAssigneeSummary } from "@/lib/assignments/undo-distribution";
+import { getRoleLabel } from "@/lib/auth/roles";
 import { Button } from "@/components/ui/button";
 import {
 	AlertDialog,
@@ -31,23 +32,160 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
 
-function formatWhen(value: string | null) {
-	if (!value) return "Unknown time";
-	try {
-		return new Intl.DateTimeFormat(undefined, {
-			dateStyle: "medium",
-			timeStyle: "short",
-		}).format(new Date(value));
-	} catch {
-		return value;
-	}
+function UndoAssigneeDialog({
+	campaignId,
+	assigneeId,
+	assigneeName,
+	assigneeLabel,
+	disabled,
+	isUndoing,
+	onConfirm,
+}: {
+	campaignId: string;
+	assigneeId: string;
+	assigneeName: string;
+	assigneeLabel: string;
+	disabled: boolean;
+	isUndoing: boolean;
+	onConfirm: () => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [preview, setPreview] = useState<UndoAssigneePreviewCounts | null>(
+		null,
+	);
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		if (isUndoing) {
+			return;
+		}
+
+		setOpen(nextOpen);
+
+		if (!nextOpen) {
+			return;
+		}
+
+		setLoading(true);
+		setError(null);
+		setPreview(null);
+
+		void previewUndoAssigneeAction(campaignId, assigneeId).then(result => {
+			if (!result.success) {
+				setError(result.error);
+				setLoading(false);
+				return;
+			}
+
+			setPreview(result.data ?? null);
+			setLoading(false);
+		});
+	};
+
+	return (
+		<AlertDialog open={open} onOpenChange={handleOpenChange}>
+			<AlertDialogTrigger
+				render={
+					<Button type="button" variant="outline" size="sm" disabled={disabled}>
+						{isUndoing ? (
+							<>
+								<Loader2 className="animate-spin" />
+								Undoing...
+							</>
+						) : (
+							<>
+								<Undo2 />
+								Undo
+							</>
+						)}
+					</Button>
+				}
+			/>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>
+						Return uncalled contacts from {assigneeName}?
+					</AlertDialogTitle>
+					{loading ? (
+						<AlertDialogDescription className="flex items-center gap-2">
+							<Loader2 className="size-4 animate-spin" />
+							Checking call attempts…
+						</AlertDialogDescription>
+					) : error ? (
+						<AlertDialogDescription>{error}</AlertDialogDescription>
+					) : preview ? (
+						<div className="space-y-3">
+							<dl className="grid gap-2 rounded-lg border bg-muted/20 px-3 py-3 text-sm">
+								<div className="flex items-center justify-between gap-4">
+									<dt className="text-muted-foreground">
+										With attempts or saved responses
+									</dt>
+									<dd className="tabular-nums font-medium">
+										{preview.withAttemptsCount}
+									</dd>
+								</div>
+								<div className="flex items-center justify-between gap-4">
+									<dt className="text-muted-foreground">No attempts</dt>
+									<dd className="tabular-nums font-medium">
+										{preview.noAttemptsCount}
+									</dd>
+								</div>
+							</dl>
+							<AlertDialogDescription>
+								{preview.noAttemptsCount > 0
+									? `Undo returns ${preview.noAttemptsCount} uncalled contact${preview.noAttemptsCount === 1 ? "" : "s"} to your pool.`
+									: "There are no uncalled contacts left to return."}{" "}
+								{preview.withAttemptsCount > 0
+									? `${preview.withAttemptsCount} with attempts or saved responses stay with ${assigneeName}.`
+									: null}{" "}
+								Other {assigneeLabel.toLowerCase()}s are not affected.
+							</AlertDialogDescription>
+						</div>
+					) : (
+						<AlertDialogDescription>
+							Only uncalled contacts will return to your pool.
+						</AlertDialogDescription>
+					)}
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel disabled={isUndoing}>Cancel</AlertDialogCancel>
+					<AlertDialogAction
+						disabled={
+							isUndoing ||
+							loading ||
+							Boolean(error) ||
+							!preview ||
+							preview.noAttemptsCount === 0
+						}
+						onClick={event => {
+							event.preventDefault();
+							setOpen(false);
+							onConfirm();
+						}}>
+						Confirm undo
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
+	);
 }
 
 type DistributionHistoryPanelProps = {
 	campaignId: string;
 	assigneeLabel: string;
-	refreshKey?: number;
+	refreshKey?: number | string;
 };
 
 export function DistributionHistoryPanel({
@@ -56,23 +194,24 @@ export function DistributionHistoryPanel({
 	refreshKey = 0,
 }: DistributionHistoryPanelProps) {
 	const router = useRouter();
-	const [jobs, setJobs] = useState<DistributionJobSummary[]>([]);
+	const [rows, setRows] = useState<CampaignAssigneeUndoRow[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [search, setSearch] = useState("");
 	const [isPending, startTransition] = useTransition();
-	const [undoingKey, setUndoingKey] = useState<string | null>(null);
+	const [undoingId, setUndoingId] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
 
 		setLoading(true);
-		void listCampaignDistributionJobsAction(campaignId).then(result => {
+		void listCampaignAssigneeUndoRowsAction(campaignId).then(result => {
 			if (cancelled) return;
 			if (!result.success) {
-				setJobs([]);
+				setRows([]);
 				setLoading(false);
 				return;
 			}
-			setJobs(result.data ?? []);
+			setRows(result.data ?? []);
 			setLoading(false);
 		});
 
@@ -81,42 +220,47 @@ export function DistributionHistoryPanel({
 		};
 	}, [campaignId, refreshKey]);
 
-	const handleUndo = (
-		jobId: string,
-		assigneeId: string,
-		assigneeName: string,
-	) => {
-		const key = `${jobId}:${assigneeId}`;
-		setUndoingKey(key);
+	const filteredRows = useMemo(() => {
+		const query = search.trim().toLowerCase();
+		if (!query) {
+			return rows;
+		}
+
+		return rows.filter(
+			row =>
+				row.name.toLowerCase().includes(query) ||
+				getRoleLabel(row.role).toLowerCase().includes(query),
+		);
+	}, [rows, search]);
+
+	const handleUndo = (assigneeId: string, assigneeName: string) => {
+		setUndoingId(assigneeId);
 		startTransition(async () => {
-			const result = await undoDistributionJobAction(jobId, assigneeId);
+			const result = await undoAssigneeAssignmentsAction(
+				campaignId,
+				assigneeId,
+			);
 
 			if (!result.success) {
 				toast.error(result.error);
-				setUndoingKey(null);
+				setUndoingId(null);
 				return;
 			}
 
-			const reclaimed = result.data?.reclaimedCount ?? 0;
-			const keptCalled = result.data?.keptCalledCount ?? 0;
-			const otherBlocked = result.data?.otherBlockedCount ?? 0;
 			const summary = formatUndoAssigneeSummary({
-				reclaimedCount: reclaimed,
-				keptCalledCount: keptCalled,
-				otherBlockedCount: otherBlocked,
+				reclaimedCount: result.data?.reclaimedCount ?? 0,
+				keptCalledCount: result.data?.keptCalledCount ?? 0,
+				otherBlockedCount: result.data?.otherBlockedCount ?? 0,
 			});
 
-			toast.success(
-				`Undo for ${assigneeName}: ${summary}.`,
-			);
-
-			setJobs(current =>
-				current.map(job =>
-					job.id === jobId && result.data?.job ? result.data.job : job,
-				),
-			);
-			setUndoingKey(null);
+			toast.success(`Undo for ${assigneeName}: ${summary}.`);
+			setUndoingId(null);
 			router.refresh();
+			void listCampaignAssigneeUndoRowsAction(campaignId).then(reload => {
+				if (reload.success) {
+					setRows(reload.data ?? []);
+				}
+			});
 		});
 	};
 
@@ -125,170 +269,173 @@ export function DistributionHistoryPanel({
 			<Card>
 				<CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
 					<Loader2 className="size-4 animate-spin" />
-					Loading distribution history…
+					Loading assigned {assigneeLabel.toLowerCase()}s…
 				</CardContent>
 			</Card>
 		);
 	}
 
-	if (jobs.length === 0) {
+	if (rows.length === 0) {
 		return null;
 	}
 
 	return (
-		<div className="space-y-4">
-			{jobs.map(job => {
-				const undoneById = new Map(
-					job.undoneAssignees.map(entry => [entry.assigneeId, entry]),
-				);
-				const undoneCount = job.undoneAssignees.length;
-				const undoableCount = job.byAssignee.filter(
-					assignee => assignee.count > 0,
-				).length;
+		<Card className="min-w-0">
+			<CardHeader className="pb-3">
+				<CardTitle className="text-base">
+					Assigned {assigneeLabel.toLowerCase()}s
+				</CardTitle>
+				<CardDescription>
+					Undo returns uncalled contacts from one person to your pool. Contacts
+					with attempts stay with them.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				<div className="space-y-2">
+					<Label htmlFor="assignee-undo-search">
+						Search {assigneeLabel.toLowerCase()}s
+					</Label>
+					<div className="relative">
+						<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+						<Input
+							id="assignee-undo-search"
+							value={search}
+							onChange={event => setSearch(event.target.value)}
+							placeholder={`Search by name or role`}
+							className="pl-9"
+						/>
+					</div>
+				</div>
 
-				return (
-					<Card key={job.id}>
-						<CardHeader className="pb-3">
-							<div className="space-y-1">
-								<CardTitle className="text-base">
-									{job.status === "undone"
-										? "Distribution fully undone"
-										: undoneCount > 0
-											? "Distribution partially undone"
-											: "Distribution completed"}
-								</CardTitle>
-								<CardDescription>
-									{formatWhen(job.completedAt)} · {job.assignedCount}{" "}
-									distributed
-									{job.retainCount > 0
-										? ` · ${job.retainCount} kept for calls`
-										: ""}
-									{undoneCount > 0
-										? ` · ${undoneCount} of ${undoableCount || undoneCount} ${assigneeLabel.toLowerCase()}${undoableCount === 1 ? "" : "s"} undone`
-										: ""}
-								</CardDescription>
-							</div>
-						</CardHeader>
-						<CardContent>
-							{job.byAssignee.length === 0 ? (
-								<p className="text-sm text-muted-foreground">
-									No assignee breakdown was stored for this job.
-								</p>
-							) : (
-								<div className="overflow-hidden rounded-xl border">
-									<div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b bg-muted/30 px-4 py-3 text-sm font-medium">
-										<span>{assigneeLabel}</span>
-										<span>Contacts</span>
-										<span className="text-right">Action</span>
+				{filteredRows.length === 0 ? (
+					<div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+						No {assigneeLabel.toLowerCase()}s match your search.
+					</div>
+				) : (
+					<>
+						<div className="grid gap-3 md:hidden">
+							{filteredRows.map(row => {
+								const canUndo = row.unattemptedCount > 0;
+								const isUndoing = undoingId === row.assigneeId && isPending;
+
+								return (
+									<div
+										key={row.assigneeId}
+										className="space-y-3 rounded-xl border p-4">
+										<div>
+											<p className="font-medium">{row.name}</p>
+											<p className="text-xs text-muted-foreground">
+												{getRoleLabel(row.role)}
+											</p>
+										</div>
+										<dl className="grid grid-cols-3 gap-2 text-center text-sm">
+											<div>
+												<dt className="text-xs text-muted-foreground">
+													Assigned
+												</dt>
+												<dd className="tabular-nums font-medium">
+													{row.assignedCount}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-xs text-muted-foreground">
+													Attempted
+												</dt>
+												<dd className="tabular-nums font-medium">
+													{row.attemptedCount}
+												</dd>
+											</div>
+											<div>
+												<dt className="text-xs text-muted-foreground">
+													Not attempted
+												</dt>
+												<dd className="tabular-nums font-medium">
+													{row.unattemptedCount}
+												</dd>
+											</div>
+										</dl>
+										{canUndo ? (
+											<UndoAssigneeDialog
+												campaignId={campaignId}
+												assigneeId={row.assigneeId}
+												assigneeName={row.name}
+												assigneeLabel={assigneeLabel}
+												disabled={isPending}
+												isUndoing={isUndoing}
+												onConfirm={() => handleUndo(row.assigneeId, row.name)}
+											/>
+										) : (
+											<p className="text-xs text-muted-foreground">
+												No uncalled contacts to return
+											</p>
+										)}
 									</div>
-									{job.byAssignee.map(assignee => {
-										const undone = undoneById.get(assignee.assigneeId);
-										const canUndo =
-											job.status === "completed" &&
-											assignee.count > 0 &&
-											!undone;
-										const rowKey = `${job.id}:${assignee.assigneeId}`;
-										const isUndoing = undoingKey === rowKey && isPending;
+								);
+							})}
+						</div>
+
+						<div className="hidden overflow-hidden rounded-xl border md:block">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead>{assigneeLabel}</TableHead>
+										<TableHead className="text-right">Assigned</TableHead>
+										<TableHead className="text-right">Attempted</TableHead>
+										<TableHead className="text-right">Not attempted</TableHead>
+										<TableHead className="text-right">Action</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{filteredRows.map(row => {
+										const canUndo = row.unattemptedCount > 0;
+										const isUndoing =
+											undoingId === row.assigneeId && isPending;
 
 										return (
-											<div
-												key={assignee.assigneeId}
-												className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b px-4 py-3 text-sm last:border-b-0">
-												<div>
-													<p className="font-medium">{assignee.name}</p>
-													{undone ? (
-														<p className="text-xs text-muted-foreground">
-															Undone ·{" "}
-															{formatUndoAssigneeSummary({
-																reclaimedCount: undone.reclaimedCount,
-																keptCalledCount: undone.keptCalledCount,
-																otherBlockedCount: undone.otherBlockedCount,
-															})}
-														</p>
-													) : null}
-												</div>
-												<span className="tabular-nums">{assignee.count}</span>
-												<div className="justify-self-end">
+											<TableRow key={row.assigneeId}>
+												<TableCell>
+													<p className="font-medium">{row.name}</p>
+													<p className="text-xs text-muted-foreground">
+														{getRoleLabel(row.role)}
+													</p>
+												</TableCell>
+												<TableCell className="text-right tabular-nums">
+													{row.assignedCount}
+												</TableCell>
+												<TableCell className="text-right tabular-nums">
+													{row.attemptedCount}
+												</TableCell>
+												<TableCell className="text-right tabular-nums">
+													{row.unattemptedCount}
+												</TableCell>
+												<TableCell className="text-right">
 													{canUndo ? (
-														<AlertDialog>
-															<AlertDialogTrigger
-																render={
-																	<Button
-																		type="button"
-																		variant="outline"
-																		size="sm"
-																		disabled={isPending}>
-																		{isUndoing ? (
-																			<>
-																				<Loader2 className="animate-spin" />
-																				Undoing...
-																			</>
-																		) : (
-																			<>
-																				<Undo2 />
-																				Undo
-																			</>
-																		)}
-																	</Button>
-																}
-															/>
-															<AlertDialogContent>
-																<AlertDialogHeader>
-																	<AlertDialogTitle>
-																		Undo distribution to {assignee.name}?
-																	</AlertDialogTitle>
-																	<AlertDialogDescription>
-																		Only contacts {assignee.name} has not
-																		called will return to your pool. Contacts
-																		with a call response stay with them. Other{" "}
-																		{assigneeLabel.toLowerCase()}s are not
-																		affected. Contacts already redistributed
-																		further will be skipped.
-																	</AlertDialogDescription>
-																</AlertDialogHeader>
-																<AlertDialogFooter>
-																	<AlertDialogCancel disabled={isPending}>
-																		Cancel
-																	</AlertDialogCancel>
-																	<AlertDialogAction
-																		disabled={isPending}
-																		onClick={event => {
-																			event.preventDefault();
-																			handleUndo(
-																				job.id,
-																				assignee.assigneeId,
-																				assignee.name,
-																			);
-																		}}>
-																		Confirm undo
-																	</AlertDialogAction>
-																</AlertDialogFooter>
-															</AlertDialogContent>
-														</AlertDialog>
-													) : undone ? (
-														<span className="text-xs text-muted-foreground">
-															Undone
-														</span>
+														<UndoAssigneeDialog
+															campaignId={campaignId}
+															assigneeId={row.assigneeId}
+															assigneeName={row.name}
+															assigneeLabel={assigneeLabel}
+															disabled={isPending}
+															isUndoing={isUndoing}
+															onConfirm={() =>
+																handleUndo(row.assigneeId, row.name)
+															}
+														/>
 													) : (
 														<span className="text-xs text-muted-foreground">
 															—
 														</span>
 													)}
-												</div>
-											</div>
+												</TableCell>
+											</TableRow>
 										);
 									})}
-									<div className="grid grid-cols-[1fr_auto_auto] gap-3 border-t bg-muted/20 px-4 py-3 text-sm font-medium">
-										<span>Pool total</span>
-										<span className="tabular-nums">{job.poolTotal}</span>
-										<span />
-									</div>
-								</div>
-							)}
-						</CardContent>
-					</Card>
-				);
-			})}
-		</div>
+								</TableBody>
+							</Table>
+						</div>
+					</>
+				)}
+			</CardContent>
+		</Card>
 	);
 }

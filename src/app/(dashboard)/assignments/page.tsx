@@ -23,7 +23,9 @@ const EMPTY_STATS: DistributionStats = {
   assigned: 0,
   unassigned: 0,
   assignedToMe: 0,
+  calledStayingWithYou: 0,
   heldForOwnCalls: 0,
+  heldUncalledCount: 0,
 };
 
 function getParam(

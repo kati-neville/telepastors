@@ -14,6 +14,7 @@ import {
 	type DistributionMode,
 } from "@/components/assignments/distribution-mode-tabs";
 import { DistributionPoolFilter } from "@/components/assignments/distribution-pool-filter";
+import { DistributionHistoryPanel } from "@/components/assignments/distribution-history-panel";
 import { EqualSplitPanel } from "@/components/assignments/equal-split-panel";
 import { RedistributeHeldContactsPanel } from "@/components/assignments/redistribute-held-contacts-panel";
 import { NoAssigneesDistributionEmpty } from "@/components/assignments/no-assignees-distribution-empty";
@@ -101,7 +102,7 @@ export function DistributionPanel({
 		[assignees],
 	);
 
-	const statsKey = `${stats.total}-${stats.assigned}-${stats.unassigned}-${stats.assignedToMe}-${stats.heldForOwnCalls}`;
+	const statsKey = `${stats.total}-${stats.assigned}-${stats.unassigned}-${stats.assignedToMe}-${stats.calledStayingWithYou}-${stats.heldForOwnCalls}-${stats.heldUncalledCount}`;
 
 	useEffect(() => {
 		if (mode !== "manual") {
@@ -224,11 +225,23 @@ export function DistributionPanel({
 				</div>
 			) : null}
 
+			{stats.calledStayingWithYou > 0 ? (
+				<p className="text-sm text-muted-foreground">
+					{stats.calledStayingWithYou} contact
+					{stats.calledStayingWithYou === 1 ? "" : "s"} with attempts staying
+					with you.
+				</p>
+			) : null}
+
 			{canRetain ? (
 				<RedistributeHeldContactsPanel
 					campaignId={campaignId}
 					actorRole={actorRole}
-					heldContactCount={stats.heldForOwnCalls}
+					heldContactCount={stats.heldUncalledCount}
+					calledHeldCount={Math.max(
+						0,
+						stats.heldForOwnCalls - stats.heldUncalledCount,
+					)}
 					assignees={assignees}
 				/>
 			) : null}
@@ -237,10 +250,11 @@ export function DistributionPanel({
 
 			{mode === "equal" ? (
 				<EqualSplitPanel
-					key={`${stats.assignedToMe}-${stats.heldForOwnCalls}-${assignees.map(assignee => assignee.id).join(",")}`}
+					key={`${stats.assignedToMe}-${stats.calledStayingWithYou}-${stats.heldForOwnCalls}-${assignees.map(assignee => assignee.id).join(",")}`}
 					campaignId={campaignId}
 					actorRole={actorRole}
 					poolContactCount={stats.assignedToMe}
+					calledStayingCount={stats.calledStayingWithYou}
 					assignees={assignees}
 				/>
 			) : assignees.length === 0 ? (
@@ -458,6 +472,12 @@ export function DistributionPanel({
 					)}
 				</>
 			)}
+
+			<DistributionHistoryPanel
+				campaignId={campaignId}
+				assigneeLabel={assigneeLabel}
+				refreshKey={`${statsKey}-${contactsRevision}`}
+			/>
 		</div>
 	);
 }

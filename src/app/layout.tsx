@@ -23,9 +23,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} h-full overflow-hidden`} suppressHydrationWarning>
       <body
-        className="h-full min-h-full font-sans antialiased"
+        className="h-full overflow-hidden overscroll-none font-sans antialiased"
         suppressHydrationWarning
       >
         <Providers>{children}</Providers>

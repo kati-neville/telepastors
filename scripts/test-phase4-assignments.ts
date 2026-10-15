@@ -13,6 +13,12 @@ import {
 	validateDistributionTotals,
 	validateSplitTotals,
 } from "@/lib/assignments/distribute-equally";
+import { aggregateAssigneeUndoRows } from "@/lib/assignments/assignee-undo";
+import {
+	isContactCalledForCurrentWork,
+	partitionCalledStatusRows,
+	summarizeUndoAssigneePreview,
+} from "@/lib/assignments/called-contacts";
 import {
 	isContactReadyForDownstreamDistribution,
 	isRetainedForCallingAssignment,
@@ -613,6 +619,111 @@ function testDistributionPoolExcludesRetainedContacts() {
 	);
 }
 
+function testCalledContactClassification() {
+	assert(
+		!isContactCalledForCurrentWork(
+			{
+				latest_response: null,
+				current_assignment_id: "asgn-1",
+				current_assignee_id: "tp-a",
+			},
+			[],
+		),
+		"No response and no attempts is uncalled",
+	);
+
+	assert(
+		isContactCalledForCurrentWork(
+			{
+				latest_response: "UNREACHABLE",
+				current_assignment_id: "asgn-1",
+				current_assignee_id: "tp-a",
+			},
+			[],
+		),
+		"Saved response counts as called",
+	);
+
+	assert(
+		isContactCalledForCurrentWork(
+			{
+				latest_response: null,
+				current_assignment_id: "asgn-1",
+				current_assignee_id: "tp-a",
+			},
+			[{ assignment_id: "asgn-1", telepastor_id: "tp-a" }],
+		),
+		"Attempt on current assignment counts as called",
+	);
+
+	assert(
+		!isContactCalledForCurrentWork(
+			{
+				latest_response: null,
+				current_assignment_id: "asgn-2",
+				current_assignee_id: "tp-b",
+			},
+			[{ assignment_id: "asgn-1", telepastor_id: "tp-a" }],
+		),
+		"Older assignee attempts do not count after reassignment",
+	);
+
+	assert(
+		isContactCalledForCurrentWork(
+			{
+				latest_response: null,
+				current_assignment_id: null,
+				current_assignee_id: null,
+			},
+			[{ assignment_id: "asgn-1", telepastor_id: "tp-a" }],
+		),
+		"Unassigned contacts with any attempt are called",
+	);
+
+	const partitioned = partitionCalledStatusRows([
+		{ contactId: "fresh", currentAssigneeId: "tp-a", isCalled: false },
+		{ contactId: "tried", currentAssigneeId: "tp-a", isCalled: true },
+	]);
+	assert(partitioned.uncalledIds.join(",") === "fresh", "Uncalled partition");
+	assert(partitioned.calledIds.join(",") === "tried", "Called partition");
+
+	const preview = summarizeUndoAssigneePreview(
+		["fresh", "tried", "moved"],
+		"tp-a",
+		[
+			{ contactId: "fresh", currentAssigneeId: "tp-a", isCalled: false },
+			{ contactId: "tried", currentAssigneeId: "tp-a", isCalled: true },
+			{ contactId: "moved", currentAssigneeId: "tp-b", isCalled: false },
+		],
+	);
+	assert(preview.noAttemptsCount === 1, "Undo preview uncalled count");
+	assert(preview.withAttemptsCount === 1, "Undo preview called count");
+	assert(preview.alreadyMovedCount === 1, "Undo preview already-moved count");
+}
+
+function testAssigneeUndoAggregation() {
+	const rows = aggregateAssigneeUndoRows(
+		[
+			{ contactId: "c1", assigneeId: "lead-b", isCalled: false },
+			{ contactId: "c2", assigneeId: "lead-a", isCalled: true },
+			{ contactId: "c3", assigneeId: "lead-a", isCalled: false },
+			{ contactId: "c4", assigneeId: "lead-a", isCalled: false },
+		],
+		new Map([
+			["lead-a", { name: "Ama Leader", role: "LEADER" }],
+			["lead-b", { name: "Kojo Leader", role: "LEADER" }],
+		]),
+	);
+
+	assert(rows.length === 2, "One row per assignee");
+	assert(rows[0]!.name === "Ama Leader", "Rows sorted by name");
+	assert(rows[0]!.assignedCount === 3, "Assigned count includes called and uncalled");
+	assert(rows[0]!.attemptedCount === 1, "Attempted count");
+	assert(rows[0]!.unattemptedCount === 2, "Not attempted count");
+	assert(rows[1]!.assignedCount === 1, "Second assignee assigned count");
+	assert(rows[1]!.unattemptedCount === 1, "Second assignee unattempted count");
+}
+
 function main() {
 	testDistributionPermissions();
 	testContactPoolPermissions();
@@ -629,6 +740,8 @@ function main() {
 	testReassignmentResetsLatestResponse();
 	testDownstreamReassignmentPermissions();
 	testDistributionPoolExcludesRetainedContacts();
+	testCalledContactClassification();
+	testAssigneeUndoAggregation();
 	console.log("Phase 4 assignment tests passed.");
 }
 

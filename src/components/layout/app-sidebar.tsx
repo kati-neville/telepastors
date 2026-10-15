@@ -20,7 +20,7 @@ export function AppSidebar({ items, telepastor, email }: AppSidebarProps) {
 	const pathname = usePathname();
 
 	return (
-		<aside className="hidden h-full w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
+		<aside className="hidden h-full min-h-0 w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
 			<nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-4">
 				{items.map(item => {
 					const isActive =

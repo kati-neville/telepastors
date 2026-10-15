@@ -39,13 +39,13 @@ import {
 	getAssigneeLabel,
 } from "@/lib/auth/assignments";
 import { NoAssigneesDistributionEmpty } from "@/components/assignments/no-assignees-distribution-empty";
-import { DistributionHistoryPanel } from "@/components/assignments/distribution-history-panel";
 import type { MinistryRole, TelepastorSummary } from "@/types/domain";
 
 type EqualSplitPanelProps = {
 	campaignId: string;
 	actorRole: MinistryRole;
 	poolContactCount: number;
+	calledStayingCount?: number;
 	assignees: TelepastorSummary[];
 	onDistributionCompleted?: () => void;
 };
@@ -60,6 +60,7 @@ export function EqualSplitPanel({
 	campaignId,
 	actorRole,
 	poolContactCount,
+	calledStayingCount = 0,
 	assignees,
 	onDistributionCompleted,
 }: EqualSplitPanelProps) {
@@ -92,7 +93,6 @@ export function EqualSplitPanel({
 	const [isDistributing, setIsDistributing] = useState(false);
 	const [progress, setProgress] = useState<DistributionProgress | null>(null);
 	const [activeJobId, setActiveJobId] = useState<string | null>(null);
-	const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
 	const distributableCount = Math.max(0, poolContactCount - retainCount);
 
@@ -222,7 +222,6 @@ export function EqualSplitPanel({
 						: `${assignedCount} contacts distributed among ${assigneeCount || sortedAssignees.length} ${assigneeLabelPlural}.`,
 				);
 				onDistributionCompleted?.();
-				setHistoryRefreshKey(current => current + 1);
 				router.refresh();
 				return;
 			}
@@ -312,34 +311,22 @@ export function EqualSplitPanel({
 					title={`Distribute equally among ${assigneeLabelPlural}`}
 					readyContactCount={poolContactCount}
 				/>
-				<DistributionHistoryPanel
-					campaignId={campaignId}
-					assigneeLabel={assigneeLabel}
-					refreshKey={historyRefreshKey}
-				/>
 			</div>
 		);
 	}
 
 	if (poolContactCount === 0) {
 		return (
-			<div className="space-y-4">
-				<Card>
-					<CardHeader>
-						<CardTitle className="text-base">
-							Distribute equally among {assigneeLabelPlural}
-						</CardTitle>
-						<CardDescription>
-							No contacts are ready to assign in your distribution pool.
-						</CardDescription>
-					</CardHeader>
-				</Card>
-				<DistributionHistoryPanel
-					campaignId={campaignId}
-					assigneeLabel={assigneeLabel}
-					refreshKey={historyRefreshKey}
-				/>
-			</div>
+			<Card>
+				<CardHeader>
+					<CardTitle className="text-base">
+						Distribute equally among {assigneeLabelPlural}
+					</CardTitle>
+					<CardDescription>
+						No contacts are ready to assign in your distribution pool.
+					</CardDescription>
+				</CardHeader>
+			</Card>
 		);
 	}
 
@@ -361,6 +348,9 @@ export function EqualSplitPanel({
 						{canRetain
 							? `Edit how many contacts to keep for your own calls. Other people's shares stay as they are until you distribute the remaining ${distributableCount} evenly.`
 							: `Split all ${poolContactCount} ready contacts across ${sortedAssignees.length} ${assigneeLabelPlural}. Default share: ${defaultPerAssignee} each, with any remainder assigned in name order.`}
+						{calledStayingCount > 0
+							? ` ${calledStayingCount} with attempts stay with you.`
+							: ""}
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
@@ -611,11 +601,6 @@ export function EqualSplitPanel({
 					</div>
 				</CardContent>
 			</Card>
-			<DistributionHistoryPanel
-				campaignId={campaignId}
-				assigneeLabel={assigneeLabel}
-				refreshKey={historyRefreshKey}
-			/>
 		</div>
 	);
 }

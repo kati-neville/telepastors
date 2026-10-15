@@ -914,6 +914,16 @@ export type Database = {
         };
         Returns: Json;
       };
+      classify_contacts_called_status: {
+        Args: {
+          p_contact_ids: string[];
+        };
+        Returns: {
+          contact_id: string;
+          current_assignee_id: string | null;
+          is_called: boolean;
+        }[];
+      };
       get_leadership_dashboard_stats: {
         Args: {
           p_assignee_ids?: string[] | null;

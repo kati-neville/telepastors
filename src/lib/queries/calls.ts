@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { sortContactsForCalling } from "@/lib/calls/queue-order";
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
@@ -104,16 +105,18 @@ async function enrichAssignedContacts(
     ]),
   );
 
-  return contacts.map((contact) => {
-    const campaign = campaignMap.get(contact.campaign_id);
-    return {
-      ...contact,
-      latest_response: contact.latest_response as CallResponse | null,
-      campaign_name: campaign?.name ?? "Unknown campaign",
-      campaign_call_script: campaign?.call_script ?? null,
-      attempt_count: attemptCountMap.get(contact.id) ?? 0,
-    };
-  });
+  return sortContactsForCalling(
+    contacts.map((contact) => {
+      const campaign = campaignMap.get(contact.campaign_id);
+      return {
+        ...contact,
+        latest_response: contact.latest_response as CallResponse | null,
+        campaign_name: campaign?.name ?? "Unknown campaign",
+        campaign_call_script: campaign?.call_script ?? null,
+        attempt_count: attemptCountMap.get(contact.id) ?? 0,
+      };
+    }),
+  );
 }
 
 export type MyCallSummary = {

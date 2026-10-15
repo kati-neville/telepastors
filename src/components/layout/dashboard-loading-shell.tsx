@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function DashboardLoadingShell() {
   return (
-    <div className="flex h-dvh overflow-hidden" aria-busy="true" aria-live="polite">
+    <div className="flex h-full max-h-full min-h-0 overflow-hidden" aria-busy="true" aria-live="polite">
       <aside className="hidden h-full w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
         <div className="flex h-16 shrink-0 items-center border-b px-4">
           <Skeleton className="h-10 w-36" />
@@ -24,7 +24,7 @@ export function DashboardLoadingShell() {
           <Skeleton className="ml-auto size-9 rounded-full" />
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-24 md:px-8 md:pb-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 pb-24 md:px-8 md:pb-8">
           <div className="space-y-6">
             <div className="space-y-2">
               <Skeleton className="h-8 w-48" />

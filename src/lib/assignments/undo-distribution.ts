@@ -252,6 +252,52 @@ export function getUndoModeForRole(
   return role === "SUPER_ADMIN" ? "unassign" : "reclaim";
 }
 
+export function buildJobUndoUpdateForAssignee(params: {
+  result: Json | null;
+  undoResult: Json | null;
+  assigneeUndo: UndoneAssigneeResult;
+  mode: string;
+}): {
+  shouldUpdate: boolean;
+  undoResultPayload: Record<string, unknown>;
+  allAssigneesUndone: boolean;
+} {
+  const result =
+    params.result &&
+    typeof params.result === "object" &&
+    !Array.isArray(params.result)
+      ? (params.result as Record<string, unknown>)
+      : null;
+  const byAssigneeList = asAssigneeSummary(result?.byAssignee);
+  const existingUndo = parseUndoResultPayload(params.undoResult);
+  const alreadyUndone = Boolean(
+    existingUndo.byAssignee[params.assigneeUndo.assigneeId],
+  );
+  const assigneeInJob = byAssigneeList.some(
+    (entry) => entry.assigneeId === params.assigneeUndo.assigneeId,
+  );
+
+  const nextByAssignee = {
+    ...existingUndo.byAssignee,
+    [params.assigneeUndo.assigneeId]: params.assigneeUndo,
+  };
+  const undoableAssigneeIds = byAssigneeList
+    .filter((entry) => entry.count > 0)
+    .map((entry) => entry.assigneeId);
+  const allAssigneesUndone =
+    undoableAssigneeIds.length > 0 &&
+    undoableAssigneeIds.every((id) => Boolean(nextByAssignee[id]));
+
+  return {
+    shouldUpdate: assigneeInJob && !alreadyUndone,
+    undoResultPayload: {
+      byAssignee: nextByAssignee,
+      mode: params.mode,
+    },
+    allAssigneesUndone,
+  };
+}
+
 const UNDO_CHUNK_SIZE = 400;
 
 export async function reclaimDistributionContacts(

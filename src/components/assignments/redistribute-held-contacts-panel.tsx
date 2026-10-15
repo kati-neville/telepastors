@@ -44,6 +44,7 @@ type RedistributeHeldContactsPanelProps = {
 	campaignId: string;
 	actorRole: MinistryRole;
 	heldContactCount: number;
+	calledHeldCount?: number;
 	assignees: TelepastorSummary[];
 	onCompleted?: () => void;
 };
@@ -58,6 +59,7 @@ export function RedistributeHeldContactsPanel({
 	campaignId,
 	actorRole,
 	heldContactCount,
+	calledHeldCount = 0,
 	assignees,
 	onCompleted,
 }: RedistributeHeldContactsPanelProps) {
@@ -250,8 +252,11 @@ export function RedistributeHeldContactsPanel({
 					Give kept contacts to one {assigneeLabel.toLowerCase()}
 				</CardTitle>
 				<CardDescription>
-					Send a portion of the contacts you kept for your own calls. The rest
-					stay on your call list.
+					Send a portion of the uncalled contacts you kept for your own calls.
+					The rest stay on your call list.
+					{calledHeldCount > 0
+						? ` ${calledHeldCount} with attempts stay with you.`
+						: ""}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">

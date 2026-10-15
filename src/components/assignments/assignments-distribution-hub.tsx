@@ -58,7 +58,8 @@ function getDefaultExpandedCampaignId(
   }
 
   const readyCampaign = campaignData.find(
-    (entry) => entry.stats.assignedToMe > 0,
+    (entry) =>
+      entry.stats.assignedToMe > 0 || entry.stats.calledStayingWithYou > 0,
   );
 
   if (readyCampaign) {

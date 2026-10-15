@@ -2,6 +2,7 @@ import {
   getCallQueueFormDefaults,
   shouldSuggestCallNotes,
 } from "@/lib/calls/form-defaults";
+import { sortContactsForCalling } from "@/lib/calls/queue-order";
 import {
   canAccessCallQueue,
   canRecordCallAttempt,
@@ -183,6 +184,21 @@ function testQueueProgress() {
   assert(`${completed} / ${assigned}`.includes("18 / 50"), "Progress counter format");
 }
 
+function testQueuePrioritizesUncalledContacts() {
+  const ordered = sortContactsForCalling([
+    { id: "tried-a", name: "Ama", attempt_count: 2 },
+    { id: "fresh-z", name: "Zainab", attempt_count: 0 },
+    { id: "tried-b", name: "Kojo", attempt_count: 1 },
+    { id: "fresh-b", name: "Bernard", attempt_count: 0 },
+  ]);
+
+  assert(
+    ordered.map((contact) => contact.id).join(",") ===
+      "fresh-b,fresh-z,tried-b,tried-a",
+    "Uncalled contacts come before any with attempts, then fewer attempts, then name",
+  );
+}
+
 function testCallQueueFormDefaults() {
   const defaults = getCallQueueFormDefaults({
     id: "contact-1",
@@ -243,6 +259,7 @@ function main() {
   testResponseValidation();
   testCallHistoryModel();
   testQueueProgress();
+  testQueuePrioritizesUncalledContacts();
   testCallQueueFormDefaults();
   console.log("Phase 5 call workflow tests passed.");
 }
