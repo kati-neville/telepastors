@@ -939,6 +939,17 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Json;
       };
+      get_next_queue_contact_ids: {
+        Args: {
+          p_campaign_id?: string | null;
+          p_skip_ids?: string[] | null;
+          p_limit?: number;
+        };
+        Returns: {
+          contact_id: string;
+          attempt_count: number;
+        }[];
+      };
       get_directory_assigned_contact_counts: {
         Args: Record<string, never>;
         Returns: {

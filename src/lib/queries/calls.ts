@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { sortContactsForCalling } from "@/lib/calls/queue-order";
+import { fetchNextQueueContacts } from "@/lib/queries/next-queue-contacts";
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllPages } from "@/lib/supabase/fetch-all-pages";
@@ -173,10 +174,10 @@ export async function fetchAssignedContacts(
   );
 }
 
-export async function fetchAssignedContactById(
+export async function fetchOwnAssignedContactRow(
   context: AuthorizationContext,
   contactId: string,
-): Promise<AssignedContact | null> {
+): Promise<Contact | null> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -187,15 +188,12 @@ export async function fetchAssignedContactById(
     .maybeSingle();
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(
+      formatSupabaseError(error, "Failed to load the assigned contact."),
+    );
   }
 
-  if (!data) {
-    return null;
-  }
-
-  const [contact] = await enrichAssignedContacts([data]);
-  return contact ?? null;
+  return (data as Contact | null) ?? null;
 }
 
 export async function fetchCallAttemptsForContact(
@@ -216,61 +214,43 @@ export async function fetchCallAttemptsForContact(
   return (data ?? []) as CallAttempt[];
 }
 
-export async function fetchNextQueueContact(
-  context: AuthorizationContext,
-  options?: {
-    campaignId?: string;
-    skipContactIds?: string[];
-    startFromContactId?: string;
-  },
-): Promise<CallQueueContact | null> {
-  const contacts = await fetchAssignedContacts(context, {
-    campaignId: options?.campaignId,
-  });
-
-  const skipSet = new Set(options?.skipContactIds ?? []);
-  const pending = contacts.filter(
-    (contact) => !contact.latest_response && !skipSet.has(contact.id),
-  );
-
-  if (pending.length === 0) {
-    return null;
-  }
-
-  let nextContact = pending[0]!;
-
-  if (options?.startFromContactId) {
-    const startIndex = pending.findIndex(
-      (contact) => contact.id === options.startFromContactId,
-    );
-
-    if (startIndex >= 0) {
-      nextContact = pending[startIndex]!;
-    }
-  }
-
-  const priorAttempts = await fetchCallAttemptsForContact(nextContact.id);
-
-  return {
-    ...nextContact,
-    prior_attempts: priorAttempts,
-  };
-}
+export { fetchNextQueueContacts };
 
 export async function fetchCallQueueContact(
   context: AuthorizationContext,
   contactId: string,
 ): Promise<CallQueueContact | null> {
-  const contact = await fetchAssignedContactById(context, contactId);
+  const contact = await fetchOwnAssignedContactRow(context, contactId);
 
   if (!contact) {
     return null;
   }
 
-  const priorAttempts = await fetchCallAttemptsForContact(contact.id);
+  const supabase = await createClient();
+  const [campaignResult, priorAttempts] = await Promise.all([
+    supabase
+      .from("campaigns")
+      .select("name, call_script")
+      .eq("id", contact.campaign_id)
+      .maybeSingle(),
+    fetchCallAttemptsForContact(contact.id),
+  ]);
+
+  if (campaignResult.error) {
+    throw new Error(
+      formatSupabaseError(
+        campaignResult.error,
+        "Failed to load campaign details for the call queue.",
+      ),
+    );
+  }
 
   return {
     ...contact,
+    latest_response: contact.latest_response as CallResponse | null,
+    campaign_name: campaignResult.data?.name ?? "Unknown campaign",
+    campaign_call_script: campaignResult.data?.call_script ?? null,
+    attempt_count: priorAttempts.length,
     prior_attempts: priorAttempts,
   };
 }

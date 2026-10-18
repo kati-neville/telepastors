@@ -24,6 +24,12 @@ export const assignedContactsFilterSchema = z.object({
   campaignId: z.string().uuid().optional(),
 });
 
+export const fetchNextQueueContactsSchema = z.object({
+  campaignId: z.string().uuid().optional(),
+  skipContactIds: z.array(z.string().uuid()).max(5000).optional(),
+  limit: z.number().int().min(1).max(10).optional(),
+});
+
 export type AssignedContactsFilterValues = z.infer<
   typeof assignedContactsFilterSchema
 >;

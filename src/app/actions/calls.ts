@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -11,34 +12,28 @@ import { recordAuditEvent } from "@/lib/audit/log";
 import { requireAuthSession } from "@/lib/auth/session";
 import { toActionErrorMessage } from "@/lib/errors/client-message";
 import {
-  fetchAssignedContactById,
-  fetchCallQueueStats,
-  fetchNextQueueContact,
+  fetchNextQueueContacts,
+  fetchOwnAssignedContactRow,
 } from "@/lib/queries/calls";
 import { createClient } from "@/lib/supabase/server";
-import { recordCallAttemptSchema } from "@/lib/validations/calls";
+import {
+  fetchNextQueueContactsSchema,
+  recordCallAttemptSchema,
+} from "@/lib/validations/calls";
+import type { CallQueueContact } from "@/types/domain";
 
 type ActionResult<T = undefined> =
   | { success: true; data?: T }
   | { success: false; error: string };
 
-// /dashboard and /reports are fully dynamic (searchParams + cookies) and read
-// live aggregates, so busting them on every saved call is wasted work.
-function revalidateCallPaths() {
+function revalidateCallListPaths() {
   revalidatePath("/my-calls");
-  revalidatePath("/my-calls/queue");
   revalidatePath("/my-calls/list");
 }
 
 export async function recordCallAttemptAction(
   values: unknown,
-): Promise<
-  ActionResult<{
-    attemptId: string;
-    nextContactId: string | null;
-    stats: Awaited<ReturnType<typeof fetchCallQueueStats>>;
-  }>
-> {
+): Promise<ActionResult<{ attemptId: string }>> {
   const session = await requireAuthSession();
   const context = { telepastor: session.telepastor };
 
@@ -59,7 +54,7 @@ export async function recordCallAttemptAction(
 
   const { contactId, response, notes } = parsed.data;
 
-  const contact = await fetchAssignedContactById(context, contactId);
+  const contact = await fetchOwnAssignedContactRow(context, contactId);
   if (!contact) {
     return {
       success: false,
@@ -118,32 +113,59 @@ export async function recordCallAttemptAction(
     };
   }
 
-  await recordAuditEvent({
-    actorId: session.telepastor.id,
-    action: AUDIT_ACTIONS.CALL_RESPONSE_RECORDED,
-    entityType: "contact",
-    entityId: contact.id,
-    metadata: {
-      response,
-      campaignId: contact.campaign_id,
-      contactName: contact.name,
-    },
+  after(async () => {
+    await recordAuditEvent({
+      actorId: session.telepastor.id,
+      action: AUDIT_ACTIONS.CALL_RESPONSE_RECORDED,
+      entityType: "contact",
+      entityId: contact.id,
+      metadata: {
+        response,
+        campaignId: contact.campaign_id,
+        contactName: contact.name,
+      },
+    });
+    revalidateCallListPaths();
   });
-
-  const [stats, nextContact] = await Promise.all([
-    fetchCallQueueStats(),
-    fetchNextQueueContact(context, { skipContactIds: [contact.id] }),
-  ]);
-
-  revalidateCallPaths();
 
   return {
     success: true,
     data: {
       attemptId: attempt.id,
-      nextContactId: nextContact?.id ?? null,
-      stats,
     },
+  };
+}
+
+export async function fetchNextQueueContactsAction(
+  values: unknown,
+): Promise<ActionResult<{ contacts: CallQueueContact[] }>> {
+  const session = await requireAuthSession();
+  const context = { telepastor: session.telepastor };
+
+  if (!canAccessCallQueue(context)) {
+    return {
+      success: false,
+      error: "You are not allowed to load the call queue.",
+    };
+  }
+
+  const parsed = fetchNextQueueContactsSchema.safeParse(values);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid queue request.",
+    };
+  }
+
+  const contacts = await fetchNextQueueContacts(context, {
+    campaignId: parsed.data.campaignId,
+    skipContactIds: parsed.data.skipContactIds,
+    limit: parsed.data.limit ?? 2,
+  });
+
+  return {
+    success: true,
+    data: { contacts },
   };
 }
 

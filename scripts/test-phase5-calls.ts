@@ -2,7 +2,11 @@ import {
   getCallQueueFormDefaults,
   shouldSuggestCallNotes,
 } from "@/lib/calls/form-defaults";
-import { sortContactsForCalling } from "@/lib/calls/queue-order";
+import {
+  selectNextQueueContacts,
+  sortContactsForCalling,
+} from "@/lib/calls/queue-order";
+import { applySavedCallToQueueStats } from "@/lib/calls/queue-stats";
 import {
   canAccessCallQueue,
   canRecordCallAttempt,
@@ -197,6 +201,49 @@ function testQueuePrioritizesUncalledContacts() {
       "fresh-b,fresh-z,tried-b,tried-a",
     "Uncalled contacts come before any with attempts, then fewer attempts, then name",
   );
+
+  const next = selectNextQueueContacts(
+    [
+      { id: "done", name: "Akosua", attempt_count: 0, latest_response: "COMING" },
+      { id: "tried-a", name: "Ama", attempt_count: 2, latest_response: null },
+      { id: "fresh-z", name: "Zainab", attempt_count: 0, latest_response: null },
+      { id: "skipped", name: "Kojo", attempt_count: 0, latest_response: null },
+      { id: "fresh-b", name: "Bernard", attempt_count: 0, latest_response: null },
+    ],
+    { skipIds: ["skipped"], limit: 3 },
+  );
+
+  assert(
+    next.map((contact) => contact.id).join(",") === "fresh-b,fresh-z,tried-a",
+    "Next window is uncalled first, skips responded and skipped ids",
+  );
+}
+
+function testOptimisticQueueStats() {
+  const stats = {
+    assigned: 10,
+    completed: 3,
+    remaining: 7,
+    coming: 2,
+    notComing: 1,
+    unreachable: 0,
+    switchedOff: 0,
+    wrongNumber: 0,
+    other: 0,
+  };
+
+  const afterComing = applySavedCallToQueueStats(stats, "COMING", {
+    wasAlreadyCompleted: false,
+  });
+  assert(afterComing.coming === 3, "Coming bucket increments");
+  assert(afterComing.completed === 4, "Completed increments");
+  assert(afterComing.remaining === 6, "Remaining decrements");
+
+  const afterRepeat = applySavedCallToQueueStats(stats, "NOT_COMING", {
+    wasAlreadyCompleted: true,
+  });
+  assert(afterRepeat.completed === 3, "Re-saving a completed contact does not recount");
+  assert(afterRepeat.remaining === 7, "Re-saving does not change remaining");
 }
 
 function testCallQueueFormDefaults() {
@@ -260,6 +307,7 @@ function main() {
   testCallHistoryModel();
   testQueueProgress();
   testQueuePrioritizesUncalledContacts();
+  testOptimisticQueueStats();
   testCallQueueFormDefaults();
   console.log("Phase 5 call workflow tests passed.");
 }

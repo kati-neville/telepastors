@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -12,7 +11,10 @@ import {
   SkipForward,
 } from "lucide-react";
 import { toast } from "sonner";
-import { recordCallAttemptAction } from "@/app/actions/calls";
+import {
+  fetchNextQueueContactsAction,
+  recordCallAttemptAction,
+} from "@/app/actions/calls";
 import { CallHistoryPanel } from "@/components/calls/call-history-panel";
 import { CallResponseBadge } from "@/components/calls/call-response-badge";
 import { CallScriptButton } from "@/components/calls/call-script-button";
@@ -27,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getCallQueueFormDefaults } from "@/lib/calls/form-defaults";
+import { applySavedCallToQueueStats } from "@/lib/calls/queue-stats";
 import {
   buildTelLink,
   buildWhatsAppLink,
@@ -35,7 +38,6 @@ import {
   CALL_RESPONSE_SHORT_LABELS,
 } from "@/lib/config/calling";
 import type {
-  AssignedContact,
   CallQueueContact,
   CallQueueStats,
   CallResponse,
@@ -43,36 +45,65 @@ import type {
 } from "@/types/domain";
 import { CALL_RESPONSES } from "@/types/domain";
 
+const PREFETCH_LIMIT = 2;
+
 type CallQueuePanelProps = {
-  initialContact: CallQueueContact | null;
-  allContacts: AssignedContact[];
+  initialContacts: CallQueueContact[];
   stats: CallQueueStats;
+  campaignId?: string;
   whatsAppTemplates: WhatsAppMessageTemplate[];
   defaultTemplateId: string | null;
 };
 
+function replaceQueueContactId(contactId: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (contactId) {
+    params.set("contactId", contactId);
+  } else {
+    params.delete("contactId");
+  }
+
+  const query = params.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    query ? `${window.location.pathname}?${query}` : window.location.pathname,
+  );
+}
+
 export function CallQueuePanel({
-  initialContact,
-  allContacts,
+  initialContacts,
   stats: initialStats,
+  campaignId,
   whatsAppTemplates,
   defaultTemplateId,
 }: CallQueuePanelProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [queue, setQueue] = useState(initialContacts);
   const [stats, setStats] = useState(initialStats);
-  const initialForm = getCallQueueFormDefaults(initialContact);
+  const [isRefilling, setIsRefilling] = useState(false);
+  const initialForm = getCallQueueFormDefaults(initialContacts[0] ?? null);
   const [selectedTemplateId, setSelectedTemplateId] = useState(
     defaultTemplateId ?? whatsAppTemplates[0]?.id ?? "",
   );
-  const [skippedIds, setSkippedIds] = useState<string[]>([]);
   const [selectedResponse, setSelectedResponse] = useState<CallResponse | null>(
     initialForm.response,
   );
   const [notes, setNotes] = useState(initialForm.notes);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [isLoadingNext, setIsLoadingNext] = useState(false);
-  const [lastSavedContactName, setLastSavedContactName] = useState("");
+
+  const queueRef = useRef(queue);
+  const excludedIdsRef = useRef(new Set<string>());
+  const refillPromiseRef = useRef<Promise<void> | null>(null);
+  const restoreFormRef = useRef(
+    new Map<string, { response: CallResponse; notes: string }>(),
+  );
+
+  queueRef.current = queue;
+
+  const currentContact = queue[0] ?? null;
 
   const templateItems = useMemo(
     () =>
@@ -83,52 +114,97 @@ export function CallQueuePanel({
     [whatsAppTemplates],
   );
 
-  const currentContact = initialContact;
-  const isAdvancing = isPending || isLoadingNext;
-
   useEffect(() => {
-    if (!initialContact) {
-      setIsLoadingNext(false);
+    if (!currentContact) {
       return;
     }
 
-    const defaults = getCallQueueFormDefaults(initialContact);
+    const draft = restoreFormRef.current.get(currentContact.id);
+    if (draft) {
+      setSelectedResponse(draft.response);
+      setNotes(draft.notes);
+      return;
+    }
+
+    const defaults = getCallQueueFormDefaults(currentContact);
     setSelectedResponse(defaults.response);
     setNotes(defaults.notes);
-    setIsLoadingNext(false);
-    setShowSuccess(false);
-  }, [initialContact?.id]);
+  }, [currentContact?.id]);
 
   const completedCount = stats.completed;
   const totalCount = stats.assigned;
 
-  const handleSkip = () => {
-    if (!currentContact || isAdvancing) return;
-
-    const nextSkipped = [...skippedIds, currentContact.id];
-    setSkippedIds(nextSkipped);
-    const skipSet = new Set(nextSkipped);
-    const next = allContacts.find(
-      (contact) =>
-        !contact.latest_response &&
-        !skipSet.has(contact.id) &&
-        contact.id !== currentContact.id,
-    );
-
-    setSelectedResponse(null);
-    setNotes("");
-    setIsLoadingNext(true);
-
-    if (next) {
-      router.replace(`/my-calls/queue?contactId=${next.id}`);
-    } else {
-      router.replace("/my-calls/queue");
+  const refillQueue = (extraSkipIds: string[] = []) => {
+    if (refillPromiseRef.current) {
+      return refillPromiseRef.current;
     }
-    router.refresh();
+
+    const pending = (async () => {
+      const skipContactIds = [
+        ...new Set([
+          ...excludedIdsRef.current,
+          ...queueRef.current.map((contact) => contact.id),
+          ...extraSkipIds,
+        ]),
+      ];
+
+      const result = await fetchNextQueueContactsAction({
+        ...(campaignId ? { campaignId } : {}),
+        skipContactIds,
+        limit: PREFETCH_LIMIT,
+      });
+
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+
+      const nextContacts = result.data?.contacts ?? [];
+      if (nextContacts.length === 0) {
+        return;
+      }
+
+      setQueue((current) => {
+        const seen = new Set(current.map((contact) => contact.id));
+        const additions = nextContacts.filter(
+          (contact) =>
+            !seen.has(contact.id) && !excludedIdsRef.current.has(contact.id),
+        );
+        return additions.length > 0 ? [...current, ...additions] : current;
+      });
+    })()
+      .catch(() => {
+        toast.error("Could not load the next contact.");
+      })
+      .finally(() => {
+        refillPromiseRef.current = null;
+        setIsRefilling(false);
+      });
+
+    refillPromiseRef.current = pending;
+    return pending;
+  };
+
+  const advanceQueue = (contact: CallQueueContact) => {
+    excludedIdsRef.current.add(contact.id);
+    const remaining = queueRef.current.filter((item) => item.id !== contact.id);
+    queueRef.current = remaining;
+    setQueue(remaining);
+    replaceQueueContactId(remaining[0]?.id ?? null);
+
+    if (remaining.length <= 1) {
+      setIsRefilling(remaining.length === 0);
+      void refillQueue([contact.id]);
+    }
+  };
+
+  const handleSkip = () => {
+    if (!currentContact || excludedIdsRef.current.has(currentContact.id)) return;
+    advanceQueue(currentContact);
   };
 
   const handleSaveAndNext = () => {
-    if (!currentContact || isAdvancing) return;
+    if (!currentContact || excludedIdsRef.current.has(currentContact.id)) return;
 
     if (!selectedResponse) {
       toast.error("Select how the call went.");
@@ -140,38 +216,60 @@ export function CallQueuePanel({
       return;
     }
 
-    startTransition(async () => {
-      const result = await recordCallAttemptAction({
-        contactId: currentContact.id,
-        response: selectedResponse,
-        notes: notes.trim() || undefined,
-      });
+    const savedContact = currentContact;
+    const previousStats = stats;
+    const response = selectedResponse;
+    const savedNotes = notes.trim() || undefined;
 
-      if (!result.success) {
-        toast.error(result.error);
+    setStats(
+      applySavedCallToQueueStats(stats, response, {
+        wasAlreadyCompleted: Boolean(savedContact.latest_response),
+      }),
+    );
+    advanceQueue(savedContact);
+
+    void recordCallAttemptAction({
+      contactId: savedContact.id,
+      response,
+      notes: savedNotes,
+    }).then((result) => {
+      if (result.success) {
+        restoreFormRef.current.delete(savedContact.id);
         return;
       }
 
-      setLastSavedContactName(currentContact.name);
-      setShowSuccess(true);
-      setIsLoadingNext(true);
-      setStats(result.data!.stats);
-      setSelectedResponse(null);
-      setNotes("");
-
-      const nextContactId = result.data?.nextContactId;
-
-      if (nextContactId) {
-        router.replace(`/my-calls/queue?contactId=${nextContactId}`);
-      } else {
-        router.replace("/my-calls/queue");
-      }
-
-      router.refresh();
+      restoreFormRef.current.set(savedContact.id, {
+        response,
+        notes: savedNotes ?? "",
+      });
+      excludedIdsRef.current.delete(savedContact.id);
+      setQueue((current) => {
+        const restored = current.some((contact) => contact.id === savedContact.id)
+          ? current
+          : [savedContact, ...current.filter((contact) => contact.id !== savedContact.id)];
+        queueRef.current = restored;
+        return restored;
+      });
+      setStats(previousStats);
+      setSelectedResponse(response);
+      setNotes(savedNotes ?? "");
+      replaceQueueContactId(savedContact.id);
+      toast.error(result.error);
     });
   };
 
   if (!currentContact) {
+    if (isRefilling) {
+      return (
+        <div className="mx-auto flex min-h-[28rem] max-w-lg flex-col items-center justify-center gap-4 px-2 py-16 text-center">
+          <Loader2 className="size-10 animate-spin text-primary" />
+          <p className="font-heading text-xl font-semibold tracking-tight">
+            Loading next contact
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center gap-6 px-2 py-10 text-center">
         <CheckCircle2 className="size-16 text-primary" />
@@ -233,40 +331,14 @@ export function CallQueuePanel({
       </div>
 
       <AnimatePresence mode="wait">
-        {isAdvancing ? (
-          <motion.div
-            key="advancing"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.15 }}
-            className="flex min-h-[28rem] flex-col items-center justify-center gap-4 rounded-2xl border bg-card px-6 py-16 text-center shadow-sm"
-          >
-            <Loader2 className="size-10 animate-spin text-primary" />
-            <div className="space-y-2">
-              <p className="font-heading text-xl font-semibold tracking-tight">
-                {isLoadingNext
-                  ? showSuccess
-                    ? "Saved — loading next contact"
-                    : "Loading next contact"
-                  : "Saving response"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {isLoadingNext && lastSavedContactName
-                  ? `Response recorded for ${lastSavedContactName}.`
-                  : "Please wait a moment."}
-              </p>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key={currentContact.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.18 }}
-            className="space-y-5"
-          >
+        <motion.div
+          key={currentContact.id}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.18 }}
+          className="space-y-5"
+        >
           <div className="rounded-2xl border bg-card p-5 shadow-sm">
             <p className="text-sm text-muted-foreground">
               {currentContact.campaign_name}
@@ -373,7 +445,6 @@ export function CallQueuePanel({
                   type="button"
                   variant={selectedResponse === response ? "default" : "outline"}
                   className="min-h-12 justify-center text-sm"
-                  disabled={isAdvancing}
                   onClick={() => setSelectedResponse(response)}
                 >
                   {CALL_RESPONSE_SHORT_LABELS[response]}
@@ -392,7 +463,6 @@ export function CallQueuePanel({
               }}
               placeholder="Optional details (required for Other)"
               rows={3}
-              disabled={isAdvancing}
             />
             <div className="flex flex-wrap gap-2">
               {CALL_NOTE_SUGGESTIONS.map((suggestion) => (
@@ -401,7 +471,6 @@ export function CallQueuePanel({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={isAdvancing}
                   onClick={() => {
                     setNotes((current) =>
                       current.trim()
@@ -421,7 +490,6 @@ export function CallQueuePanel({
               type="button"
               variant="outline"
               className="min-h-12 flex-1"
-              disabled={isAdvancing}
               onClick={handleSkip}
             >
               <SkipForward />
@@ -430,21 +498,13 @@ export function CallQueuePanel({
             <Button
               type="button"
               className="min-h-12 flex-[2] text-base"
-              disabled={isAdvancing || !selectedResponse}
+              disabled={!selectedResponse}
               onClick={handleSaveAndNext}
             >
-              {isAdvancing ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  {isLoadingNext ? "Loading..." : "Saving..."}
-                </>
-              ) : (
-                "Save & Next"
-              )}
+              Save & Next
             </Button>
           </div>
-          </motion.div>
-        )}
+        </motion.div>
       </AnimatePresence>
     </div>
   );
