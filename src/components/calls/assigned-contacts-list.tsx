@@ -6,6 +6,13 @@ import { CallResponseBadge } from "@/components/calls/call-response-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import {
 	Table,
 	TableBody,
 	TableCell,
@@ -13,6 +20,12 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import {
+	ASSIGNED_CONTACTS_SORT_ITEMS,
+	emptyAssignedContactsSortMessage,
+	filterAndSortAssignedContacts,
+	type AssignedContactsSort,
+} from "@/lib/calls/assigned-contacts-sort";
 import { truncateText } from "@/lib/utils/text";
 import type { AssignedContact } from "@/types/domain";
 
@@ -20,7 +33,20 @@ type AssignedContactsListProps = {
 	contacts: AssignedContact[];
 	search: string;
 	onSearchChange: (value: string) => void;
+	sort: AssignedContactsSort;
+	onSortChange: (value: AssignedContactsSort) => void;
 };
+
+function formatLastAttempt(value: string | null) {
+	if (!value) {
+		return "—";
+	}
+
+	return new Intl.DateTimeFormat("en", {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(new Date(value));
+}
 
 function contactQueueHref(contactId: string) {
 	return `/my-calls/queue?contactId=${contactId}`;
@@ -30,35 +56,64 @@ export function AssignedContactsList({
 	contacts,
 	search,
 	onSearchChange,
+	sort,
+	onSortChange,
 }: AssignedContactsListProps) {
 	const query = search.trim().toLowerCase();
-	const filtered = query
+	const searched = query
 		? contacts.filter(
 				contact =>
 					contact.name.toLowerCase().includes(query) ||
 					contact.phone.toLowerCase().includes(query),
 			)
 		: contacts;
+	const filtered = filterAndSortAssignedContacts(searched, sort);
 
 	return (
 		<div className="space-y-4">
-			<div className="space-y-2">
-				<Label htmlFor="assigned-contacts-search">Search contacts</Label>
-				<div className="relative">
-					<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-					<Input
-						id="assigned-contacts-search"
-						value={search}
-						onChange={event => onSearchChange(event.target.value)}
-						placeholder="Search by name or phone"
-						className="pl-9"
-					/>
+			<div className="grid gap-4 sm:grid-cols-2">
+				<div className="space-y-2">
+					<Label htmlFor="assigned-contacts-search">Search contacts</Label>
+					<div className="relative">
+						<Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+						<Input
+							id="assigned-contacts-search"
+							value={search}
+							onChange={event => onSearchChange(event.target.value)}
+							placeholder="Search by name or phone"
+							className="pl-9"
+						/>
+					</div>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="assigned-contacts-sort">Sort by</Label>
+					<Select
+						value={sort}
+						items={ASSIGNED_CONTACTS_SORT_ITEMS}
+						onValueChange={(value) => {
+							if (!value) return;
+							onSortChange(value as AssignedContactsSort);
+						}}
+					>
+						<SelectTrigger id="assigned-contacts-sort" className="w-full">
+							<SelectValue placeholder="Sort contacts" />
+						</SelectTrigger>
+						<SelectContent>
+							{ASSIGNED_CONTACTS_SORT_ITEMS.map((item) => (
+								<SelectItem key={item.value} value={item.value}>
+									{item.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 				</div>
 			</div>
 
 			{filtered.length === 0 ? (
 				<div className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-					No assigned contacts match your search.
+					{query
+						? "No assigned contacts match your search."
+						: emptyAssignedContactsSortMessage(sort)}
 				</div>
 			) : (
 				<>
@@ -78,6 +133,7 @@ export function AssignedContactsList({
 									<TableHead>Response</TableHead>
 									<TableHead>Notes</TableHead>
 									<TableHead>Attempts</TableHead>
+									<TableHead>Last attempt</TableHead>
 									<TableHead className="text-right">Actions</TableHead>
 								</TableRow>
 							</TableHeader>
@@ -107,6 +163,9 @@ export function AssignedContactsList({
 											)}
 										</TableCell>
 										<TableCell>{contact.attempt_count}</TableCell>
+										<TableCell className="text-muted-foreground">
+											{formatLastAttempt(contact.latest_response_at)}
+										</TableCell>
 										<TableCell className="text-right">
 											<Link
 												href={contactQueueHref(contact.id)}
@@ -150,6 +209,9 @@ function ContactCard({ contact }: { contact: AssignedContact }) {
 					<p className="text-xs text-muted-foreground">
 						{contact.attempt_count} attempt
 						{contact.attempt_count === 1 ? "" : "s"}
+						{contact.latest_response_at
+							? ` · ${formatLastAttempt(contact.latest_response_at)}`
+							: ""}
 					</p>
 					{contact.latest_notes?.trim() ? (
 						<p className="inline-flex items-start gap-1 text-xs text-muted-foreground">

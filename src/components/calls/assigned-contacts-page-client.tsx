@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { AssignedContactsList } from "@/components/calls/assigned-contacts-list";
 import { Button } from "@/components/ui/button";
+import type { AssignedContactsSort } from "@/lib/calls/assigned-contacts-sort";
 import type { AssignedContact } from "@/types/domain";
 
 export function AssignedContactsPageClient({
@@ -13,6 +14,7 @@ export function AssignedContactsPageClient({
   contacts: AssignedContact[];
 }) {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<AssignedContactsSort>("calling");
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -38,6 +40,8 @@ export function AssignedContactsPageClient({
         contacts={contacts}
         search={search}
         onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
       />
     </div>
   );

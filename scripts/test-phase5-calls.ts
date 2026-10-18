@@ -2,6 +2,7 @@ import {
   getCallQueueFormDefaults,
   shouldSuggestCallNotes,
 } from "@/lib/calls/form-defaults";
+import { filterAndSortAssignedContacts } from "@/lib/calls/assigned-contacts-sort";
 import {
   selectNextQueueContacts,
   sortContactsForCalling,
@@ -248,6 +249,63 @@ function testOptimisticQueueStats() {
   assert(afterChange.unreachable === 0, "Previous response bucket decrements");
 }
 
+function testAssignedContactsAttemptedSort() {
+  const now = new Date(2026, 9, 18, 12);
+  const contacts = [
+    {
+      name: "Kojo",
+      latest_response_at: new Date(2026, 9, 18, 8).toISOString(),
+      attempt_count: 1,
+    },
+    {
+      name: "Ama",
+      latest_response_at: new Date(2026, 9, 14, 8).toISOString(),
+      attempt_count: 2,
+    },
+    {
+      name: "Zainab",
+      latest_response_at: null,
+      attempt_count: 0,
+    },
+    {
+      name: "Bernard",
+      latest_response_at: new Date(2026, 9, 1, 8).toISOString(),
+      attempt_count: 1,
+    },
+  ];
+
+  assert(
+    filterAndSortAssignedContacts(contacts, "today", now)
+      .map((contact) => contact.name)
+      .join(",") === "Kojo",
+    "Today is only contacts attempted today, newest first",
+  );
+  assert(
+    filterAndSortAssignedContacts(contacts, "week", now)
+      .map((contact) => contact.name)
+      .join(",") === "Kojo,Ama",
+    "This week includes today and earlier this week",
+  );
+  assert(
+    filterAndSortAssignedContacts(contacts, "month", now)
+      .map((contact) => contact.name)
+      .join(",") === "Kojo,Ama,Bernard",
+    "This month includes all October attempts",
+  );
+  assert(
+    filterAndSortAssignedContacts(contacts, "never", now)
+      .map((contact) => contact.name)
+      .join(",") === "Zainab",
+    "Not attempted is contacts with no attempts",
+  );
+  assert(
+    filterAndSortAssignedContacts(contacts, "recent", now)
+      .map((contact) => contact.name)
+      .join(",") === "Kojo,Ama,Bernard",
+    "Last attempted is newest first and excludes never attempted",
+  );
+}
+
 function testCallQueueFormDefaults() {
   const defaults = getCallQueueFormDefaults({
     id: "contact-1",
@@ -310,6 +368,7 @@ function main() {
   testQueueProgress();
   testQueuePrioritizesUncalledContacts();
   testOptimisticQueueStats();
+  testAssignedContactsAttemptedSort();
   testCallQueueFormDefaults();
   console.log("Phase 5 call workflow tests passed.");
 }
