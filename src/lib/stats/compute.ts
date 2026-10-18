@@ -58,8 +58,7 @@ export function withDerivedCampaignRates(
 			? Math.round((stats.completed / denominator) * 1000) / 10
 			: 0;
 
-	const reached =
-		stats.coming + stats.notComing + stats.wrongNumber + stats.other;
+	const reached = getReachedContactCount(stats);
 	stats.reachRate =
 		denominator > 0 ? Math.round((reached / denominator) * 1000) / 10 : 0;
 
@@ -137,6 +136,7 @@ export function computeContactStatistics(
 	return withDerivedCampaignRates(stats);
 }
 
+/** Spoken-to contacts: Coming, Not Coming, or Other. Wrong Number is not reached. */
 export function getReachedContactCount(
 	stats: Pick<CampaignStatistics, "coming" | "notComing" | "other">,
 ) {

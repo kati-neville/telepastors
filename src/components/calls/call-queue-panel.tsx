@@ -29,7 +29,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getCallQueueFormDefaults } from "@/lib/calls/form-defaults";
-import { applySavedCallToQueueStats } from "@/lib/calls/queue-stats";
+import {
+  applySavedCallToQueueStats,
+  revertSavedCallOnQueueStats,
+} from "@/lib/calls/queue-stats";
 import {
   buildTelLink,
   buildWhatsAppLink,
@@ -217,13 +220,13 @@ export function CallQueuePanel({
     }
 
     const savedContact = currentContact;
-    const previousStats = stats;
+    const previousResponse = savedContact.latest_response;
     const response = selectedResponse;
     const savedNotes = notes.trim() || undefined;
 
     setStats(
       applySavedCallToQueueStats(stats, response, {
-        wasAlreadyCompleted: Boolean(savedContact.latest_response),
+        previousResponse,
       }),
     );
     advanceQueue(savedContact);
@@ -250,7 +253,9 @@ export function CallQueuePanel({
         queueRef.current = restored;
         return restored;
       });
-      setStats(previousStats);
+      setStats((current) =>
+        revertSavedCallOnQueueStats(current, response, { previousResponse }),
+      );
       setSelectedResponse(response);
       setNotes(savedNotes ?? "");
       replaceQueueContactId(savedContact.id);

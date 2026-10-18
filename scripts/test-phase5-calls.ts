@@ -233,17 +233,19 @@ function testOptimisticQueueStats() {
   };
 
   const afterComing = applySavedCallToQueueStats(stats, "COMING", {
-    wasAlreadyCompleted: false,
+    previousResponse: null,
   });
   assert(afterComing.coming === 3, "Coming bucket increments");
   assert(afterComing.completed === 4, "Completed increments");
   assert(afterComing.remaining === 6, "Remaining decrements");
 
-  const afterRepeat = applySavedCallToQueueStats(stats, "NOT_COMING", {
-    wasAlreadyCompleted: true,
+  const afterChange = applySavedCallToQueueStats(stats, "NOT_COMING", {
+    previousResponse: "UNREACHABLE",
   });
-  assert(afterRepeat.completed === 3, "Re-saving a completed contact does not recount");
-  assert(afterRepeat.remaining === 7, "Re-saving does not change remaining");
+  assert(afterChange.completed === 3, "Re-saving a completed contact does not recount");
+  assert(afterChange.remaining === 7, "Re-saving does not change remaining");
+  assert(afterChange.notComing === 2, "New response bucket increments");
+  assert(afterChange.unreachable === 0, "Previous response bucket decrements");
 }
 
 function testCallQueueFormDefaults() {

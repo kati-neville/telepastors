@@ -6,7 +6,10 @@ import {
   memberMatchesPerformanceView,
   resolveTeamPerformanceView,
 } from "@/lib/reports/team-performance-view";
-import { computeContactStatistics } from "@/lib/stats/compute";
+import {
+  computeContactStatistics,
+  getReachedContactCount,
+} from "@/lib/stats/compute";
 import { truncateText } from "@/lib/utils/text";
 import type { Telepastor } from "@/types/domain";
 
@@ -120,6 +123,35 @@ function testReachAndComingRates() {
 
   assert(stats.reachRate === 50, "Reach excludes unreachable");
   assert(stats.comingPercentage === 33.3, "Coming percentage of completed");
+  assert(
+    getReachedContactCount(stats) === stats.coming + stats.notComing,
+    "Reached count matches Coming + Not Coming when no Wrong Number/Other",
+  );
+}
+
+function testReachedExcludesWrongNumber() {
+  const stats = computeContactStatistics(
+    [
+      {
+        id: "c1",
+        campaign_id: "camp-1",
+        latest_response: "WRONG_NUMBER",
+        assignment_status: "IN_PROGRESS",
+        current_assignee_id: "tp-a",
+      },
+      {
+        id: "c2",
+        campaign_id: "camp-1",
+        latest_response: "COMING",
+        assignment_status: "IN_PROGRESS",
+        current_assignee_id: "tp-a",
+      },
+    ],
+    2,
+  );
+
+  assert(getReachedContactCount(stats) === 1, "Wrong Number is not reached");
+  assert(stats.reachRate === 50, "Reach rate excludes Wrong Number");
 }
 
 function testReportScoping() {
@@ -239,6 +271,7 @@ function main() {
   testUniqueContactStatistics();
   testRepeatedAttemptsDoNotInflateContacts();
   testReachAndComingRates();
+  testReachedExcludesWrongNumber();
   testReportScoping();
   testTeamPerformanceViews();
   testTruncateText();

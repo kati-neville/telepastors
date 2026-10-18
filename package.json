@@ -24,6 +24,7 @@
     "test:phase4": "tsx scripts/test-phase4-assignments.ts",
     "test:phase5": "tsx scripts/test-phase5-calls.ts",
     "test:phase6": "tsx scripts/test-phase6-stats.ts",
+    "test:stats-accuracy": "tsx scripts/test-stats-accuracy.ts",
     "test:phase7": "tsx scripts/test-phase7-broadcasts.ts",
     "test:phase8": "tsx scripts/test-phase8-hardening.ts"
   },

@@ -37,7 +37,7 @@ export function CampaignStatsOverview({
       {showRates ? (
         <>
           <StatCard label="Completion" value={stats.completionPercentage} suffix="%" />
-          <StatCard label="Reach rate" value={stats.reachRate} suffix="%" description="Excludes unreachable" />
+          <StatCard label="Reach rate" value={stats.reachRate} suffix="%" description="Coming, Not Coming, or Other" />
           <StatCard label="Coming rate" value={stats.comingPercentage} suffix="%" description="Of completed contacts" />
         </>
       ) : null}
