@@ -105,10 +105,12 @@ async function LeadershipDashboardContent({
   context,
   filters,
   role,
+  organizationName,
 }: {
   context: AuthorizationContext;
   filters: ReportFilterValues;
   role: MinistryRole;
+  organizationName: string;
 }) {
   const shell = await fetchLeadershipDashboardShell(context, filters);
 
@@ -121,6 +123,7 @@ async function LeadershipDashboardContent({
       <LeadershipDashboardStats
         data={shell}
         filters={filters}
+        organizationName={organizationName}
         recentActivity={
           <Suspense fallback={<RecentActivitySkeleton />}>
             <LeadershipRecentActivitySection
@@ -174,6 +177,7 @@ export default async function DashboardPage({
         <TelepastorDashboard
           stats={stats}
           telepastorName={telepastor.name}
+          organizationName={session.organizationName}
           contactsWithNotesCount={contactsWithNotesCount}
           recentActivity={recentActivity}
         />
@@ -193,6 +197,7 @@ export default async function DashboardPage({
           context={context}
           filters={filters}
           role={telepastor.role}
+          organizationName={session.organizationName}
         />
       </div>
     );

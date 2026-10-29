@@ -99,11 +99,60 @@ async function findAuthUserByEmail(
 	}
 }
 
+async function ensureSeedOrganization(
+	supabase: SupabaseClient<Database, "public">,
+): Promise<string> {
+	const orgName =
+		process.env.SEED_ORGANIZATION_NAME?.trim() || "First Love";
+
+	const { data: existing, error: existingError } = await supabase
+		.from("organizations")
+		.select("id")
+		.ilike("name", orgName)
+		.maybeSingle();
+
+	if (existingError) {
+		throw new Error(`Failed to look up organization: ${existingError.message}`);
+	}
+
+	if (existing?.id) {
+		return existing.id;
+	}
+
+	const { data: createdOrgId, error: createError } = await supabase.rpc(
+		"create_organization_with_defaults",
+		{ p_name: orgName },
+	);
+
+	if (!createError && createdOrgId) {
+		return createdOrgId;
+	}
+
+	const { data: inserted, error: insertError } = await supabase
+		.from("organizations")
+		.insert({ name: orgName })
+		.select("id")
+		.single();
+
+	if (insertError || !inserted) {
+		throw new Error(
+			`Failed to create organization: ${createError?.message ?? insertError?.message}`,
+		);
+	}
+
+	await supabase.rpc("seed_organization_whatsapp_templates", {
+		p_organization_id: inserted.id,
+	});
+
+	return inserted.id;
+}
+
 async function upsertSeedUser(
 	supabase: SupabaseClient<Database, "public">,
 	spec: SeedUserSpec,
 	email: string,
 	createdUsers: Map<string, CreatedSeedUser>,
+	organizationId: string,
 ): Promise<CreatedSeedUser> {
 	const existingProfile = await supabase
 		.from("telepastors")
@@ -174,6 +223,7 @@ async function upsertSeedUser(
 
 	const profilePayload = {
 		auth_user_id: authUser.id,
+		organization_id: organizationId,
 		name: spec.name,
 		phone: spec.phone,
 		phone_normalized: phoneNormalized,
@@ -271,12 +321,21 @@ async function main() {
 
 	const emailDomain = process.env.SEED_EMAIL_DOMAIN ?? DEFAULT_EMAIL_DOMAIN;
 	const supabase = createServiceRoleClient();
+	const organizationId = await ensureSeedOrganization(supabase);
 	const createdUsers = new Map<string, CreatedSeedUser>();
 	const results: CreatedSeedUser[] = [];
 
+	console.log(`Using organization ${organizationId}`);
+
 	for (const spec of SEED_USERS) {
 		const email = `${spec.emailLocalPart}@${emailDomain}`;
-		const result = await upsertSeedUser(supabase, spec, email, createdUsers);
+		const result = await upsertSeedUser(
+			supabase,
+			spec,
+			email,
+			createdUsers,
+			organizationId,
+		);
 		createdUsers.set(spec.key, result);
 		results.push(result);
 

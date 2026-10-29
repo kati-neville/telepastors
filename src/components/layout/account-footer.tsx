@@ -9,12 +9,13 @@ import type { Telepastor } from "@/types/domain";
 type AccountFooterProps = {
 	telepastor: Telepastor;
 	email: string;
+	organizationName?: string;
 };
 
 function getInitials(name: string) {
 	return name
 		.split(" ")
-		.map((part) => part[0])
+		.map(part => part[0])
 		.join("")
 		.slice(0, 2)
 		.toUpperCase();
@@ -23,13 +24,13 @@ function getInitials(name: string) {
 export function SidebarAccountFooter({
 	telepastor,
 	email,
+	organizationName,
 }: AccountFooterProps) {
 	return (
 		<div className="shrink-0 border-t p-4">
 			<Link
 				href="/profile"
-				className="mb-3 flex items-center gap-3 rounded-lg px-1 py-1 transition-colors hover:bg-sidebar-accent/60"
-			>
+				className="mb-3 flex items-center gap-3 rounded-lg px-1 py-1 transition-colors hover:bg-sidebar-accent/60">
 				<Avatar size="sm">
 					{telepastor.profile_picture_url ? (
 						<AvatarImage
@@ -40,7 +41,11 @@ export function SidebarAccountFooter({
 					<AvatarFallback>{getInitials(telepastor.name)}</AvatarFallback>
 				</Avatar>
 				<div className="min-w-0 flex-1">
-					<p className="truncate text-sm font-medium">{telepastor.name}</p>
+					<p className="truncate text-sm font-medium">
+						{organizationName
+							? `${telepastor.name} - ${organizationName}`
+							: telepastor.name}
+					</p>
 					<p className="truncate text-xs text-muted-foreground">{email}</p>
 					<p className="truncate text-xs text-muted-foreground">
 						{getRoleLabel(telepastor.role)}
@@ -57,15 +62,19 @@ export function MobileAccountFooter({
 	telepastor,
 	email,
 	onNavigate,
+	organizationName,
 }: AccountFooterProps & { onNavigate: (href: string) => void }) {
 	return (
 		<div className="mt-auto border-t p-4">
 			<button
 				type="button"
 				onClick={() => onNavigate("/profile")}
-				className="mb-3 block w-full rounded-lg px-1 py-1 text-left hover:bg-accent/60"
-			>
-				<p className="truncate text-sm font-medium">{telepastor.name}</p>
+				className="mb-3 block w-full rounded-lg px-1 py-1 text-left hover:bg-accent/60">
+				<p className="truncate text-sm font-medium">
+					{organizationName
+						? `${telepastor.name} - ${organizationName}`
+						: telepastor.name}
+				</p>
 				<p className="truncate text-xs text-muted-foreground">{email}</p>
 				<p className="truncate text-xs text-muted-foreground">
 					{getRoleLabel(telepastor.role)}

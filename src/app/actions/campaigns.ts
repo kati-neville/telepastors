@@ -90,6 +90,7 @@ export async function createCampaignAction(
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
+      organization_id: session.telepastor.organization_id,
       name: parsed.data.name,
       description: parsed.data.description || null,
       event_date: parsed.data.event_date || null,

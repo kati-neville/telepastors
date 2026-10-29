@@ -6,6 +6,7 @@ import type { AuditAction } from "@/lib/audit/types";
 
 export type RecordAuditEventInput = {
   actorId: string;
+  organizationId?: string | null;
   action: AuditAction | string;
   entityType: string;
   entityId?: string | null;
@@ -16,6 +17,7 @@ export async function recordAuditEvent(input: RecordAuditEventInput) {
   try {
     const supabase = await createClient();
     const { error } = await supabase.from("audit_logs").insert({
+      organization_id: input.organizationId ?? undefined,
       actor_id: input.actorId,
       action: input.action,
       entity_type: input.entityType,

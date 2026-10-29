@@ -186,6 +186,7 @@ export async function createTelepastorAction(
   const { data, error } = await admin
     .from("telepastors")
     .insert({
+      organization_id: session.telepastor.organization_id,
       name: parsed.data.name,
       phone: parsed.data.phone,
       phone_normalized: phoneNormalized,

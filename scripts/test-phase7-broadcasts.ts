@@ -27,6 +27,7 @@ function makeTelepastor(
 ): Telepastor {
   return {
     auth_user_id: null,
+    organization_id: overrides.organization_id ?? "org-1",
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
     phone_normalized: null,

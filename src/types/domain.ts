@@ -9,9 +9,17 @@ export const MINISTRY_ROLES = [
 
 export type MinistryRole = (typeof MINISTRY_ROLES)[number];
 
+export type Organization = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Telepastor = {
   id: string;
   auth_user_id: string | null;
+  organization_id: string;
   name: string;
   phone: string;
   phone_normalized: string | null;
@@ -66,6 +74,8 @@ export type AuthSession = {
   phone: string | null;
   loginIdentifier: string;
   telepastor: Telepastor;
+  organizationId: string;
+  organizationName: string;
 };
 
 export const CAMPAIGN_STATUSES = [
@@ -79,6 +89,7 @@ export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 
 export type Campaign = {
   id: string;
+  organization_id: string;
   name: string;
   description: string | null;
   event_date: string | null;
@@ -98,6 +109,7 @@ export type CampaignDetail = Campaign & {
 
 export type Contact = {
   id: string;
+  organization_id: string;
   campaign_id: string;
   name: string;
   phone: string;

@@ -51,11 +51,27 @@ Run all SQL files in `supabase/migrations/` **in order** against your Supabase p
 11. `20240827000011_contact_held_for_own_calls.sql`
 12. `20240827000012_audit_logs_select_own.sql`
 
-### 4. Bootstrap the first Super Admin
+### 4. Bootstrap a Super Admin (+ organization)
+
+Creates an organization (empty workspace) and its first Super Admin.
+Existing ministries are not affected — each organization name is its own tenant.
+
+Required env:
+
+```bash
+BOOTSTRAP_ADMIN_ORGANIZATION_NAME="First Love"
+BOOTSTRAP_ADMIN_EMAIL=...
+BOOTSTRAP_ADMIN_PASSWORD=...
+# optional: BOOTSTRAP_ADMIN_NAME, BOOTSTRAP_ADMIN_PHONE, BOOTSTRAP_ADMIN_ADDRESS
+```
 
 ```bash
 npm run bootstrap:super-admin
 ```
+
+Apply migration `20240827000036_organizations_multitenancy.sql` in the hosted
+Supabase SQL editor before bootstrapping additional Super Admins. That migration
+moves all current data into organization **First Love**.
 
 ### 5. Seed test users (optional, local dev)
 
@@ -87,7 +103,8 @@ npm run dev
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Bootstrap only | Server-only; bootstrap script only |
-| `BOOTSTRAP_ADMIN_*` | Bootstrap only | First Super Admin credentials |
+| `BOOTSTRAP_ADMIN_*` | Bootstrap only | Super Admin credentials |
+| `BOOTSTRAP_ADMIN_ORGANIZATION_NAME` | Bootstrap only | Organization / ministry name for that Super Admin’s workspace |
 | `SMS_PROVIDER` | Optional | Set to `twilio` to enable SMS |
 | `TWILIO_*` | If SMS | Twilio credentials |
 | `NEXT_PUBLIC_WHATSAPP_MESSAGE_TEMPLATE` | Optional | Fallback WhatsApp template |

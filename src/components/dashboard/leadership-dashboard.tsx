@@ -27,6 +27,7 @@ export function LeadershipDashboardStats({
 	variant = "dashboard",
 	recentActivity,
 	teamPerformance,
+	organizationName,
 }: {
 	data: LeadershipDashboardShellData;
 	filters: ReportFilterValues;
@@ -35,6 +36,7 @@ export function LeadershipDashboardStats({
 	variant?: "dashboard" | "reports";
 	recentActivity: React.ReactNode;
 	teamPerformance: React.ReactNode;
+	organizationName?: string;
 }) {
 	const contactsWithNotesHref = buildContactsWithNotesHref(filters);
 	const isReports = variant === "reports";
@@ -44,6 +46,11 @@ export function LeadershipDashboardStats({
 			{showHeader ? (
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 					<div>
+						{organizationName ? (
+							<p className="text-sm font-medium text-muted-foreground">
+								{organizationName}
+							</p>
+						) : null}
 						<h2 className="font-heading text-2xl font-semibold tracking-tight">
 							Dashboard
 						</h2>

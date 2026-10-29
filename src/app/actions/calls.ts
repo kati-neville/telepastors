@@ -74,6 +74,7 @@ export async function recordCallAttemptAction(
   const { data: attempt, error: insertError } = await supabase
     .from("call_attempts")
     .insert({
+      organization_id: contact.organization_id ?? session.telepastor.organization_id,
       contact_id: contact.id,
       campaign_id: contact.campaign_id,
       telepastor_id: session.telepastor.id,

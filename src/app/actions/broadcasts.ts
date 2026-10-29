@@ -148,6 +148,7 @@ export async function confirmBroadcastAction(
   const { data: broadcast, error: broadcastError } = await supabase
     .from("sms_broadcasts")
     .insert({
+      organization_id: session.telepastor.organization_id,
       message: parsed.data.message,
       campaign_id: parsed.data.campaignId ?? null,
       recipient_scope: parsed.data.scope,

@@ -62,11 +62,11 @@ function buildContactPhone(index: number) {
   return formatLocalPhone("055", index);
 }
 
-async function getSuperAdminId() {
+async function getSuperAdmin() {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("telepastors")
-    .select("id, name")
+    .select("id, name, organization_id")
     .eq("role", "SUPER_ADMIN")
     .limit(1)
     .maybeSingle();
@@ -74,6 +74,12 @@ async function getSuperAdminId() {
   if (error || !data) {
     throw new Error(
       "No SUPER_ADMIN found. Run npm run bootstrap:super-admin first.",
+    );
+  }
+
+  if (!data.organization_id) {
+    throw new Error(
+      "Super Admin has no organization_id. Apply organizations migration first.",
     );
   }
 
@@ -85,6 +91,7 @@ async function createMember(input: {
   role: MinistryRole;
   phone: string;
   address: string;
+  organizationId: string;
   governorId?: string | null;
   leaderId?: string | null;
 }): Promise<CreatedMember> {
@@ -94,6 +101,7 @@ async function createMember(input: {
   const { data, error } = await supabase
     .from("telepastors")
     .insert({
+      organization_id: input.organizationId,
       name: input.name,
       phone: input.phone,
       phone_normalized: phoneNormalized,
@@ -136,7 +144,7 @@ async function createMember(input: {
   };
 }
 
-async function seedHierarchy() {
+async function seedHierarchy(organizationId: string) {
   const governors: CreatedMember[] = [];
   const leaders: CreatedMember[] = [];
   const telepastors: CreatedMember[] = [];
@@ -148,6 +156,7 @@ async function seedHierarchy() {
       role: "GOVERNOR",
       phone: buildGovernorPhone(governorIndex),
       address: `Governor ${governorIndex} Office`,
+      organizationId,
     });
     governors.push(governor);
     console.log(`  ${governor.name} (${governor.phone})`);
@@ -163,6 +172,7 @@ async function seedHierarchy() {
         role: "LEADER",
         phone: buildLeaderPhone(governorNumber, leaderIndex),
         address: `Leader ${governorNumber}-${leaderIndex} Office`,
+        organizationId,
         governorId: governor.id,
       });
       leaders.push(leader);
@@ -192,6 +202,7 @@ async function seedHierarchy() {
           telepastorIndex,
         ),
         address: `Telepastor ${governorNumber}-${leaderNumber}-${telepastorIndex} Address`,
+        organizationId,
         leaderId: leader.id,
       });
       telepastors.push(telepastor);
@@ -205,6 +216,7 @@ async function seedHierarchy() {
 
 async function createSeedCampaign(
   createdBy: string,
+  organizationId: string,
   contactCount: number,
   campaignName: string,
 ) {
@@ -213,6 +225,7 @@ async function createSeedCampaign(
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .insert({
+      organization_id: organizationId,
       name: campaignName,
       description: `Generated dataset with ${contactCount} contacts`,
       status: "ACTIVE",
@@ -310,17 +323,18 @@ async function main() {
 
   assertDevOrForced(force);
 
-  const superAdmin = await getSuperAdminId();
+  const superAdmin = await getSuperAdmin();
 
   console.log(`Using super admin: ${superAdmin.name}`);
 
   const campaign = await createSeedCampaign(
     superAdmin.id,
+    superAdmin.organization_id,
     contactCount,
     campaignName,
   );
 
-  const hierarchy = await seedHierarchy();
+  const hierarchy = await seedHierarchy(superAdmin.organization_id);
 
   await seedContacts(campaign.id, contactCount, superAdmin.id);
 

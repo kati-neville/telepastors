@@ -29,6 +29,7 @@ function makeTelepastor(
 ): Telepastor {
   return {
     auth_user_id: null,
+    organization_id: overrides.organization_id ?? "org-1",
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
     phone_normalized: null,
@@ -57,7 +58,12 @@ function testErrorSanitization() {
     new Error("new row violates row-level security policy"),
     "Fallback message",
   );
-  assert(sanitized === "Fallback message", "RLS errors are sanitized");
+  assert(
+    sanitized ===
+      "You do not have permission to create this member with the selected role or placement.",
+    "RLS errors are sanitized",
+  );
+  assert(sanitized !== "new row violates row-level security policy", "RLS details hidden");
 
   const userFacing = toClientErrorMessage(
     new Error("Please select a campaign."),
@@ -69,7 +75,11 @@ function testErrorSanitization() {
     { message: "duplicate key value violates unique constraint" },
     "Fallback message",
   );
-  assert(postgrestLike === "Fallback message", "PostgREST-like objects are sanitized");
+  assert(
+    postgrestLike ===
+      "That phone number is already registered to another ministry member.",
+    "PostgREST-like objects are sanitized",
+  );
 }
 
 function testSearchEscaping() {
@@ -181,6 +191,7 @@ function testCallRecordingAuthorization() {
   const tpA = makeTelepastor({ id: "tp-a", role: "TELEPASTOR", leader_id: "lead-a" });
   const contactForA = {
     id: "c1",
+    organization_id: "org-1",
     campaign_id: "camp-1",
     current_assignee_id: "tp-a",
     latest_response: null,
@@ -265,8 +276,11 @@ function testPasswordValidation() {
   const weakIssues = getNewPasswordIssues("abc");
   assert(weakIssues.length > 0, "Short password rejected");
 
-  const strongIssues = getNewPasswordIssues("abcd");
-  assert(strongIssues.length === 0, "Four character password accepted");
+  const stillWeak = getNewPasswordIssues("abcde");
+  assert(stillWeak.length > 0, "Five character password rejected");
+
+  const strongIssues = getNewPasswordIssues("abcdef");
+  assert(strongIssues.length === 0, "Six character password accepted");
 }
 
 function main() {

@@ -209,6 +209,7 @@ export async function parseTelepastorImportPreviewAction(
   const { data: importRecord, error: importError } = await supabase
     .from("telepastor_imports")
     .insert({
+      organization_id: session.telepastor.organization_id,
       imported_by: session.telepastor.id,
       file_name: file.name,
       status: "PREVIEW",
@@ -324,6 +325,7 @@ export async function confirmTelepastorImportAction(
     const { data: created, error: insertError } = await admin
       .from("telepastors")
       .insert({
+        organization_id: session.telepastor.organization_id,
         name: row.name,
         phone: row.phone,
         phone_normalized: row.phoneNormalized!,

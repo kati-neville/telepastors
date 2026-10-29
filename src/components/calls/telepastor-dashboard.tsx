@@ -10,11 +10,13 @@ import type { CallQueueStats, RecentCallActivity } from "@/types/domain";
 export function TelepastorDashboard({
   stats,
   telepastorName,
+  organizationName,
   contactsWithNotesCount = 0,
   recentActivity = [],
 }: {
   stats: CallQueueStats;
   telepastorName: string;
+  organizationName?: string;
   contactsWithNotesCount?: number;
   recentActivity?: RecentCallActivity[];
 }) {
@@ -23,6 +25,11 @@ export function TelepastorDashboard({
   return (
     <div className="space-y-6">
       <div>
+        {organizationName ? (
+          <p className="text-sm font-medium text-muted-foreground">
+            {organizationName}
+          </p>
+        ) : null}
         <h2 className="font-heading text-2xl font-semibold tracking-tight">
           Welcome back, {telepastorName.split(" ")[0]}
         </h2>

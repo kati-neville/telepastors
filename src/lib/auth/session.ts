@@ -92,6 +92,16 @@ export async function requireAuthSession(
     redirect("/change-password");
   }
 
+  const { data: organization, error: organizationError } = await supabase
+    .from("organizations")
+    .select("id, name")
+    .eq("id", telepastor.organization_id)
+    .maybeSingle();
+
+  if (organizationError || !organization) {
+    redirect("/login?error=organization_missing");
+  }
+
   const email = user.email ?? null;
   const phone = user.phone ?? null;
 
@@ -101,6 +111,8 @@ export async function requireAuthSession(
     phone,
     loginIdentifier: buildLoginIdentifier(email, phone, telepastor.phone),
     telepastor,
+    organizationId: organization.id,
+    organizationName: organization.name,
   };
 }
 

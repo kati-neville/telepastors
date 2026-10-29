@@ -16,6 +16,7 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 				items={navItems}
 				telepastor={session.telepastor}
 				email={session.loginIdentifier}
+				organizationName={session.organizationName}
 			/>
 
 			<div className="hidden min-w-0 flex-1 md:block">
@@ -24,14 +25,20 @@ export function AppHeader({ session, navItems, title }: AppHeaderProps) {
 						{title}
 					</h1>
 				) : (
-					<p className="truncate text-sm text-muted-foreground">
-						Telepastors Ministry
-					</p>
+					<div className="flex min-w-0 flex-col justify-center">
+						<p className="truncate font-heading text-sm font-semibold tracking-tight">
+							{session.organizationName}
+						</p>
+						<p className="truncate text-xs text-muted-foreground">
+							Telepastors
+						</p>
+					</div>
 				)}
 			</div>
 			<UserMenu
 				telepastor={session.telepastor}
 				email={session.loginIdentifier}
+				organizationName={session.organizationName}
 			/>
 		</header>
 	);

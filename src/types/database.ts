@@ -9,10 +9,32 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      organizations: {
+        Row: {
+          id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       telepastors: {
         Row: {
           id: string;
           auth_user_id: string | null;
+          organization_id: string;
           name: string;
           phone: string;
           phone_normalized: string | null;
@@ -31,6 +53,7 @@ export type Database = {
         Insert: {
           id?: string;
           auth_user_id?: string | null;
+          organization_id: string;
           name: string;
           phone: string;
           phone_normalized: string | null;
@@ -49,6 +72,7 @@ export type Database = {
         Update: {
           id?: string;
           auth_user_id?: string | null;
+          organization_id?: string;
           name?: string;
           phone?: string;
           phone_normalized?: string | null;
@@ -73,6 +97,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "telepastors_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "telepastors_governor_id_fkey";
             columns: ["governor_id"];
             isOneToOne: false;
@@ -91,6 +122,7 @@ export type Database = {
       campaigns: {
         Row: {
           id: string;
+          organization_id: string;
           name: string;
           description: string | null;
           event_date: string | null;
@@ -102,6 +134,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id: string;
           name: string;
           description?: string | null;
           event_date?: string | null;
@@ -113,6 +146,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           name?: string;
           description?: string | null;
           event_date?: string | null;
@@ -123,6 +157,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "campaigns_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "campaigns_created_by_fkey";
             columns: ["created_by"];
@@ -135,6 +176,7 @@ export type Database = {
       contacts: {
         Row: {
           id: string;
+          organization_id: string;
           campaign_id: string;
           name: string;
           phone: string;
@@ -166,6 +208,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id?: string;
           campaign_id: string;
           name: string;
           phone: string;
@@ -197,6 +240,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           campaign_id?: string;
           name?: string;
           phone?: string;
@@ -227,6 +271,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "contacts_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "contacts_campaign_id_fkey";
             columns: ["campaign_id"];
@@ -260,6 +311,7 @@ export type Database = {
       contact_assignments: {
         Row: {
           id: string;
+          organization_id: string;
           contact_id: string;
           campaign_id: string;
           assignee_id: string;
@@ -273,6 +325,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id?: string;
           contact_id: string;
           campaign_id: string;
           assignee_id: string;
@@ -286,6 +339,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           contact_id?: string;
           campaign_id?: string;
           assignee_id?: string;
@@ -338,6 +392,7 @@ export type Database = {
       distribution_jobs: {
         Row: {
           id: string;
+          organization_id: string;
           campaign_id: string;
           actor_id: string;
           status: "pending" | "running" | "completed" | "failed" | "undone";
@@ -358,6 +413,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id?: string;
           campaign_id: string;
           actor_id: string;
           status?: "pending" | "running" | "completed" | "failed" | "undone";
@@ -378,6 +434,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           campaign_id?: string;
           actor_id?: string;
           status?: "pending" | "running" | "completed" | "failed" | "undone";
@@ -416,6 +473,7 @@ export type Database = {
       call_attempts: {
         Row: {
           id: string;
+          organization_id: string;
           contact_id: string;
           campaign_id: string;
           telepastor_id: string;
@@ -432,6 +490,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id?: string;
           contact_id: string;
           campaign_id: string;
           telepastor_id: string;
@@ -448,6 +507,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           contact_id?: string;
           campaign_id?: string;
           telepastor_id?: string;
@@ -496,6 +556,7 @@ export type Database = {
       whatsapp_message_templates: {
         Row: {
           id: string;
+          organization_id: string;
           name: string;
           slug: string;
           body: string;
@@ -507,6 +568,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id: string;
           name: string;
           slug: string;
           body: string;
@@ -518,6 +580,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           name?: string;
           slug?: string;
           body?: string;
@@ -528,6 +591,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "whatsapp_message_templates_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "whatsapp_message_templates_created_by_fkey";
             columns: ["created_by"];
@@ -540,6 +610,7 @@ export type Database = {
       sms_broadcasts: {
         Row: {
           id: string;
+          organization_id: string;
           message: string;
           campaign_id: string | null;
           recipient_scope:
@@ -567,6 +638,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id: string;
           message: string;
           campaign_id?: string | null;
           recipient_scope:
@@ -692,6 +764,7 @@ export type Database = {
       audit_logs: {
         Row: {
           id: string;
+          organization_id: string;
           actor_id: string | null;
           action: string;
           entity_type: string;
@@ -701,6 +774,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id?: string;
           actor_id?: string | null;
           action: string;
           entity_type: string;
@@ -710,6 +784,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           actor_id?: string | null;
           action?: string;
           entity_type?: string;
@@ -730,6 +805,7 @@ export type Database = {
       contact_imports: {
         Row: {
           id: string;
+          organization_id: string;
           campaign_id: string;
           imported_by: string | null;
           file_name: string;
@@ -747,6 +823,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id?: string;
           campaign_id: string;
           imported_by?: string | null;
           file_name: string;
@@ -764,6 +841,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          organization_id?: string;
           campaign_id?: string;
           imported_by?: string | null;
           file_name?: string;
@@ -799,6 +877,7 @@ export type Database = {
       telepastor_imports: {
         Row: {
           id: string;
+          organization_id: string;
           imported_by: string | null;
           file_name: string;
           status: "PREVIEW" | "COMPLETED" | "FAILED" | "CANCELLED";
@@ -816,6 +895,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          organization_id: string;
           imported_by?: string | null;
           file_name: string;
           status?: "PREVIEW" | "COMPLETED" | "FAILED" | "CANCELLED";
@@ -864,11 +944,20 @@ export type Database = {
       can_change_role: { Args: Record<string, never>; Returns: boolean };
       can_manage_telepastor: { Args: { target_id: string }; Returns: boolean };
       can_view_telepastor: { Args: { target_id: string }; Returns: boolean };
+      create_organization_with_defaults: {
+        Args: { p_name: string };
+        Returns: string;
+      };
       current_ministry_role: {
         Args: Record<string, never>;
         Returns: "SUPER_ADMIN" | "GOVERNOR" | "LEADER" | "TELEPASTOR";
       };
+      current_organization_id: { Args: Record<string, never>; Returns: string };
       current_telepastor_id: { Args: Record<string, never>; Returns: string };
+      seed_organization_whatsapp_templates: {
+        Args: { p_organization_id: string };
+        Returns: undefined;
+      };
       get_governor_for_telepastor: {
         Args: { target_id: string };
         Returns: string;

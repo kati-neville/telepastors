@@ -32,6 +32,7 @@ function makeTelepastor(
 ): Telepastor {
   return {
     auth_user_id: null,
+    organization_id: overrides.organization_id ?? "org-1",
     name: overrides.name ?? "Test User",
     phone: "+233000000000",
     phone_normalized: null,
@@ -309,6 +310,7 @@ function testAssignedContactsAttemptedSort() {
 function testCallQueueFormDefaults() {
   const defaults = getCallQueueFormDefaults({
     id: "contact-1",
+    organization_id: "org-1",
     campaign_id: "camp-1",
     name: "Jane Doe",
     phone: "+233244123456",

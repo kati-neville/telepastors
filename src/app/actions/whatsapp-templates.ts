@@ -80,6 +80,7 @@ export async function saveWhatsAppTemplateAction(
     }
   } else {
     const { data, error } = await supabase.from("whatsapp_message_templates").insert({
+      organization_id: session.telepastor.organization_id,
       name: parsed.data.name,
       slug: parsed.data.slug,
       body: parsed.data.body,

@@ -20,9 +20,15 @@ type MobileNavProps = {
 	items: VisibleNavItem[];
 	telepastor: Telepastor;
 	email: string;
+	organizationName?: string;
 };
 
-export function MobileNav({ items, telepastor, email }: MobileNavProps) {
+export function MobileNav({
+	items,
+	telepastor,
+	email,
+	organizationName,
+}: MobileNavProps) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const [open, setOpen] = useState(false);
@@ -51,7 +57,7 @@ export function MobileNav({ items, telepastor, email }: MobileNavProps) {
 			/>
 			<SheetContent side="left" className="flex w-72 flex-col p-0">
 				<nav className="flex flex-col gap-1 p-4">
-					{items.map((item) => {
+					{items.map(item => {
 						const isActive =
 							pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -60,8 +66,7 @@ export function MobileNav({ items, telepastor, email }: MobileNavProps) {
 								key={item.href}
 								type="button"
 								className={getNavItemClassName(isActive, "sheet")}
-								onClick={() => navigate(item.href)}
-							>
+								onClick={() => navigate(item.href)}>
 								<NavIcon name={item.icon} className="size-4 shrink-0" />
 								<span className="min-w-0 flex-1 truncate text-left">
 									{item.title}
@@ -74,6 +79,7 @@ export function MobileNav({ items, telepastor, email }: MobileNavProps) {
 				<MobileAccountFooter
 					telepastor={telepastor}
 					email={email}
+					organizationName={organizationName}
 					onNavigate={navigate}
 				/>
 			</SheetContent>

@@ -24,6 +24,7 @@ export default async function DashboardLayout({
         items={navItems}
         telepastor={session.telepastor}
         email={session.loginIdentifier}
+        organizationName={session.organizationName}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader session={session} navItems={navItems} />
