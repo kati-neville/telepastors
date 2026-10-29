@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,16 +68,17 @@ function UndoAssigneeDialog({
 	);
 
 	const handleOpenChange = (nextOpen: boolean) => {
+		// Always allow close so the dialog can't leave the page inert.
+		if (!nextOpen) {
+			setOpen(false);
+			return;
+		}
+
 		if (isUndoing) {
 			return;
 		}
 
-		setOpen(nextOpen);
-
-		if (!nextOpen) {
-			return;
-		}
-
+		setOpen(true);
 		setLoading(true);
 		setError(null);
 		setPreview(null);
@@ -169,8 +170,7 @@ function UndoAssigneeDialog({
 							!preview ||
 							preview.noAttemptsCount === 0
 						}
-						onClick={event => {
-							event.preventDefault();
+						onClick={() => {
 							setOpen(false);
 							onConfirm();
 						}}>
@@ -197,8 +197,8 @@ export function DistributionHistoryPanel({
 	const [rows, setRows] = useState<CampaignAssigneeUndoRow[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
-	const [isPending, startTransition] = useTransition();
 	const [undoingId, setUndoingId] = useState<string | null>(null);
+	const isUndoingAny = undoingId !== null;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -233,9 +233,10 @@ export function DistributionHistoryPanel({
 		);
 	}, [rows, search]);
 
-	const handleUndo = (assigneeId: string, assigneeName: string) => {
+	const handleUndo = async (assigneeId: string, assigneeName: string) => {
 		setUndoingId(assigneeId);
-		startTransition(async () => {
+
+		try {
 			const result = await undoAssigneeAssignmentsAction(
 				campaignId,
 				assigneeId,
@@ -243,7 +244,6 @@ export function DistributionHistoryPanel({
 
 			if (!result.success) {
 				toast.error(result.error);
-				setUndoingId(null);
 				return;
 			}
 
@@ -254,14 +254,16 @@ export function DistributionHistoryPanel({
 			});
 
 			toast.success(`Undo for ${assigneeName}: ${summary}.`);
-			setUndoingId(null);
+
+			const reload = await listCampaignAssigneeUndoRowsAction(campaignId);
+			if (reload.success) {
+				setRows(reload.data ?? []);
+			}
+
 			router.refresh();
-			void listCampaignAssigneeUndoRowsAction(campaignId).then(reload => {
-				if (reload.success) {
-					setRows(reload.data ?? []);
-				}
-			});
-		});
+		} finally {
+			setUndoingId(null);
+		}
 	};
 
 	if (loading) {
@@ -316,7 +318,7 @@ export function DistributionHistoryPanel({
 						<div className="grid gap-3 md:hidden">
 							{filteredRows.map(row => {
 								const canUndo = row.unattemptedCount > 0;
-								const isUndoing = undoingId === row.assigneeId && isPending;
+								const isUndoing = undoingId === row.assigneeId;
 
 								return (
 									<div
@@ -360,9 +362,11 @@ export function DistributionHistoryPanel({
 												assigneeId={row.assigneeId}
 												assigneeName={row.name}
 												assigneeLabel={assigneeLabel}
-												disabled={isPending}
+												disabled={isUndoingAny}
 												isUndoing={isUndoing}
-												onConfirm={() => handleUndo(row.assigneeId, row.name)}
+												onConfirm={() => {
+													void handleUndo(row.assigneeId, row.name);
+												}}
 											/>
 										) : (
 											<p className="text-xs text-muted-foreground">
@@ -388,8 +392,7 @@ export function DistributionHistoryPanel({
 								<TableBody>
 									{filteredRows.map(row => {
 										const canUndo = row.unattemptedCount > 0;
-										const isUndoing =
-											undoingId === row.assigneeId && isPending;
+										const isUndoing = undoingId === row.assigneeId;
 
 										return (
 											<TableRow key={row.assigneeId}>
@@ -415,11 +418,11 @@ export function DistributionHistoryPanel({
 															assigneeId={row.assigneeId}
 															assigneeName={row.name}
 															assigneeLabel={assigneeLabel}
-															disabled={isPending}
+															disabled={isUndoingAny}
 															isUndoing={isUndoing}
-															onConfirm={() =>
-																handleUndo(row.assigneeId, row.name)
-															}
+															onConfirm={() => {
+																void handleUndo(row.assigneeId, row.name);
+															}}
 														/>
 													) : (
 														<span className="text-xs text-muted-foreground">
