@@ -203,6 +203,16 @@ export type Database = {
             | "COMPLETED";
           current_assignee_id: string | null;
           current_assignment_id: string | null;
+          attempt_count: number;
+          last_attempt_at: string | null;
+          last_attempt_response:
+            | "COMING"
+            | "NOT_COMING"
+            | "UNREACHABLE"
+            | "SWITCHED_OFF"
+            | "WRONG_NUMBER"
+            | "OTHER"
+            | null;
           created_at: string;
           updated_at: string;
         };
@@ -235,6 +245,16 @@ export type Database = {
             | "COMPLETED";
           current_assignee_id?: string | null;
           current_assignment_id?: string | null;
+          attempt_count?: number;
+          last_attempt_at?: string | null;
+          last_attempt_response?:
+            | "COMING"
+            | "NOT_COMING"
+            | "UNREACHABLE"
+            | "SWITCHED_OFF"
+            | "WRONG_NUMBER"
+            | "OTHER"
+            | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -267,6 +287,16 @@ export type Database = {
             | "COMPLETED";
           current_assignee_id?: string | null;
           current_assignment_id?: string | null;
+          attempt_count?: number;
+          last_attempt_at?: string | null;
+          last_attempt_response?:
+            | "COMING"
+            | "NOT_COMING"
+            | "UNREACHABLE"
+            | "SWITCHED_OFF"
+            | "WRONG_NUMBER"
+            | "OTHER"
+            | null;
           created_at?: string;
           updated_at?: string;
         };

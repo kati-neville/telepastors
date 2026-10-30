@@ -30,6 +30,10 @@ import {
   RECENT_ACTIVITY_PREVIEW_LIMIT,
 } from "@/lib/reports/recent-activity-limit";
 import {
+  toReportFromBound,
+  toReportToBound,
+} from "@/lib/reports/date-bounds";
+import {
   countContactsWithNotesFast,
   fetchLeadershipContactStats,
   resolveLeadershipContactScope,
@@ -111,12 +115,14 @@ async function fetchFollowUpContacts(
     query = query.eq("latest_response", filters.response);
   }
 
-  if (filters.from) {
-    query = query.gte("latest_response_at", filters.from);
+  const fromBound = toReportFromBound(filters.from);
+  if (fromBound) {
+    query = query.gte("latest_response_at", fromBound);
   }
 
-  if (filters.to) {
-    query = query.lte("latest_response_at", filters.to);
+  const toBound = toReportToBound(filters.to);
+  if (toBound) {
+    query = query.lte("latest_response_at", toBound);
   }
 
   const { data, error } = await query;
@@ -407,8 +413,8 @@ export async function fetchTeamPerformanceBundle(
     p_scope_all: scopeAll,
     p_campaign_id: filters.campaignId ?? null,
     p_response: filters.response ?? null,
-    p_from: filters.from ?? null,
-    p_to: filters.to ?? null,
+    p_from: toReportFromBound(filters.from),
+    p_to: toReportToBound(filters.to),
   });
 
   if (error) {
@@ -455,8 +461,8 @@ export async function fetchLeadershipRecentActivity(
     p_scope_all: scopeAll,
     p_campaign_id: filters.campaignId ?? null,
     p_response: filters.response ?? null,
-    p_from: filters.from ?? null,
-    p_to: filters.to ?? null,
+    p_from: toReportFromBound(filters.from),
+    p_to: toReportToBound(filters.to),
     p_has_notes: filters.hasNotes === "true",
     p_limit: limit,
   });

@@ -1,5 +1,9 @@
 import type { AuthorizationContext } from "@/lib/auth/permissions";
 import { getScopedAssigneeIds } from "@/lib/auth/reports";
+import {
+  toReportFromBound,
+  toReportToBound,
+} from "@/lib/reports/date-bounds";
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import { campaignStatisticsFromCounts } from "@/lib/stats/compute";
@@ -70,8 +74,8 @@ export async function fetchLeadershipContactStats(
     p_scope_all: scopeAll,
     p_campaign_id: filters.campaignId ?? null,
     p_response: filters.response ?? null,
-    p_from: filters.from ?? null,
-    p_to: filters.to ?? null,
+    p_from: toReportFromBound(filters.from),
+    p_to: toReportToBound(filters.to),
   });
 
   if (error) {
