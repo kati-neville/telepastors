@@ -13,6 +13,9 @@ import path from "node:path";
 import {
   buildCampaignContactsExportBuffer,
   buildCampaignContactsExportFilename,
+  CAMPAIGN_CONTACT_EXPORT_KINDS,
+  filterCampaignContactsForExport,
+  type CampaignContactExportKind,
 } from "../src/lib/excel/contact-export";
 import { loadCampaignContactsForExport } from "../src/lib/contacts/load-campaign-contacts-export";
 import { createServiceRoleClient } from "../src/lib/supabase/admin";
@@ -40,10 +43,11 @@ Required:
 
 Optional:
   --out=<dir>              Output directory (default: ./exports)
+  --kind=all|attempted|unattempted   Contact set (default: all)
 
 Examples:
   npm run export:campaign-contacts -- --campaign=a8f01172-8766-4157-812b-513942e9dd15
-  npm run export:campaign-contacts -- --campaign="Swollen Sunday" --out=./exports
+  npm run export:campaign-contacts -- --campaign="Swollen Sunday" --kind=unattempted --out=./exports
 `);
 }
 
@@ -103,6 +107,16 @@ async function main() {
 
   const campaignArg = parseArg(args, "--campaign");
   const outDir = parseArg(args, "--out") ?? "./exports";
+  const kindArg = parseArg(args, "--kind") ?? "all";
+  const kind = kindArg as CampaignContactExportKind;
+
+  if (
+    !CAMPAIGN_CONTACT_EXPORT_KINDS.includes(kind)
+  ) {
+    throw new Error(
+      `--kind must be one of: ${CAMPAIGN_CONTACT_EXPORT_KINDS.join(", ")}`,
+    );
+  }
 
   if (!campaignArg?.trim()) {
     printUsage();
@@ -121,9 +135,10 @@ async function main() {
   );
   console.log("Mode: READ-ONLY (no deletes or updates).");
 
-  const rows = await loadCampaignContactsForExport(supabase, campaign.id);
+  const allRows = await loadCampaignContactsForExport(supabase, campaign.id);
+  const rows = filterCampaignContactsForExport(allRows, kind);
   const buffer = buildCampaignContactsExportBuffer(rows);
-  const filename = buildCampaignContactsExportFilename(campaign.name);
+  const filename = buildCampaignContactsExportFilename(campaign.name, kind);
   const absoluteOutDir = path.resolve(process.cwd(), outDir);
   const filePath = path.join(absoluteOutDir, filename);
 

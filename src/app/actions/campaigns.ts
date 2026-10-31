@@ -18,6 +18,9 @@ import { validateColumnMapping } from "@/lib/excel/column-mapping";
 import {
   buildCampaignContactsExportBuffer,
   buildCampaignContactsExportFilename,
+  CAMPAIGN_CONTACT_EXPORT_KINDS,
+  filterCampaignContactsForExport,
+  type CampaignContactExportKind,
 } from "@/lib/excel/contact-export";
 import {
   buildContactImportTemplateBuffer,
@@ -611,6 +614,7 @@ export async function downloadContactImportTemplateAction(): Promise<
 /** Export campaign contacts to Excel. Read-only — never deletes contacts. */
 export async function exportCampaignContactsAction(
   campaignId: string,
+  kind: CampaignContactExportKind = "all",
 ): Promise<ActionResult<{ base64: string; filename: string; rowCount: number }>> {
   const session = await requireAuthSession();
   const context = { telepastor: session.telepastor };
@@ -626,15 +630,20 @@ export async function exportCampaignContactsAction(
     return { success: false, error: "Campaign is required." };
   }
 
+  if (!CAMPAIGN_CONTACT_EXPORT_KINDS.includes(kind)) {
+    return { success: false, error: "Export type is invalid." };
+  }
+
   const campaign = await fetchCampaignById(campaignId);
   if (!campaign) {
     return { success: false, error: "Campaign not found." };
   }
 
   try {
-    const rows = await fetchCampaignContactsForExport(campaignId);
+    const allRows = await fetchCampaignContactsForExport(campaignId);
+    const rows = filterCampaignContactsForExport(allRows, kind);
     const buffer = buildCampaignContactsExportBuffer(rows);
-    const filename = buildCampaignContactsExportFilename(campaign.name);
+    const filename = buildCampaignContactsExportFilename(campaign.name, kind);
 
     await recordAuditEvent({
       actorId: session.telepastor.id,
@@ -642,6 +651,7 @@ export async function exportCampaignContactsAction(
       entityType: "campaign",
       entityId: campaignId,
       metadata: {
+        kind,
         rowCount: rows.length,
         filename,
       },
